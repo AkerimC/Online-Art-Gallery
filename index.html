@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Art & Workshops</title>
+    <meta name="description" content="A premium online art gallery and workshop reservation platform.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="glass-nav">
+        <div class="logo">
+            <h1>Aura<span>.</span></h1>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#" onclick="navigate('home')" class="active">Discover</a></li>
+            <li><a href="#" onclick="navigate('events')">Workshops</a></li>
+            <li><a href="#" onclick="navigate('favorites')">Favorites <span id="fav-count"></span></a></li>
+            <li><a href="#" onclick="navigate('cart')">Cart <span id="cart-count"></span></a></li>
+        </ul>
+        <div class="nav-actions">
+            <button class="icon-btn" onclick="openSupport()"><i data-lucide="message-circle"></i></button>
+            <button class="btn-primary" onclick="navigate('profile')" id="login-btn">Login / Register</button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main id="app-content">
+        <!-- Views will be injected here via JS -->
+    </main>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content glass-card">
+            <button class="close-btn" onclick="closeModal()"><i data-lucide="x"></i></button>
+            <div id="modal-body">
+                <!-- Modal Content Injected -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
