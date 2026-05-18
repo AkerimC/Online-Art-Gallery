@@ -11,7 +11,8 @@ const State = {
     orders: [],
     compareList: [], 
     compareMode: false,
-    currentView: 'home'
+    currentView: 'home',
+    appliedDiscount: 0
 };
 
 async function loadData() {
@@ -54,7 +55,8 @@ async function navigate(view) {
                 </div>
                 <div id="compare-action-bar" style="display:none;" class="floating-action">
                     <span style="display:flex;align-items:center;">Select items to compare</span>
-                    <button class="btn-primary" onclick="showComparison()">Compare Selected</button>
+                    <button class="btn-secondary" onclick="State.compareList = []; navigate(State.currentView);">Clear</button>
+                    <button class="btn-primary" onclick="saveComparison()">Save Comparison</button>
                 </div>
                 <div class="grid-container" id="artworks-grid"></div>
             `;
@@ -190,130 +192,185 @@ function renderFavorites() {
 
 function renderCart() {
     const main = document.getElementById('app-content');
-    if (!State.currentUser) return showToast('Please login first', 'error');
     
-    const cartTotal = State.cart.reduce((sum, item) => sum + item.price, 0);
+    if (State.cart.length === 0) {
+        main.innerHTML = `
+            <div class="page-header" style="text-align:center; padding: 4rem 1rem;">
+                <h2>Your Cart is Empty</h2>
+                <p class="text-muted" style="margin-top:1rem;">Add some beautiful artworks or join a workshop!</p>
+                <button class="btn-primary" onclick="navigate('home')" style="margin-top:2rem;">Explore Artworks</button>
+            </div>
+        `;
+        return;
+    }
+
+    const subtotal = State.cart.reduce((sum, item) => sum + item.price, 0);
+    const discountAmount = (subtotal * (State.appliedDiscount || 0)) / 100;
+    const total = subtotal - discountAmount;
 
     main.innerHTML = `
-        <div class="page-header"><h2>Shopping Cart</h2></div>
-        <div style="max-width: 800px; margin: 0 auto; background: var(--glass-bg); padding: 2rem; border-radius: 12px; border: 1px solid var(--glass-border);">
-            ${State.cart.length === 0 ? '<p>Your cart is empty.</p>' : `
-                <ul style="list-style:none;">
-                    ${State.cart.map((item, idx) => `
-                        <li style="display:flex; justify-content:space-between; margin-bottom: 1rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem;">
-                            <div>
-                                <h4>${item.title}</h4>
-                                <span class="text-muted">${item.type}</span>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:1rem;">
-                                <span class="price">$${item.price}</span>
-                                <button class="icon-btn" onclick="removeFromCart(${idx})"><i data-lucide="trash-2"></i></button>
-                            </div>
-                        </li>
-                    `).join('')}
-                </ul>
-                <div class="form-group" style="margin-top: 2rem;">
-                    <label>Discount Coupon</label>
-                    <div style="display:flex; gap:1rem;">
-                        <input type="text" placeholder="Enter code">
-                        <button class="btn-secondary" onclick="showToast('Invalid Coupon', 'error')">Apply</button>
+        <div class="page-header">
+            <h2>Your Cart</h2>
+        </div>
+        <div style="padding: 0 5%; display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+            <div class="grid" style="grid-template-columns: 1fr;">
+                ${State.cart.map((item, idx) => `
+                    <div class="glass-card p-4" style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h4>${item.title}</h4>
+                            <p class="text-muted">${item.type || 'Item'}</p>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:1rem;">
+                            <span class="text-accent">$${item.price}</span>
+                            <button class="icon-btn" onclick="removeFromCart(${idx})"><i data-lucide="trash-2"></i></button>
+                        </div>
                     </div>
+                `).join('')}
+            </div>
+            
+            <div class="glass-card" style="padding: 2rem; height: fit-content;">
+                <h3>Order Summary</h3>
+                
+                <div style="margin: 1.5rem 0; display:flex; flex-direction:column; gap:0.8rem;">
+                    <input type="text" id="coupon-input" placeholder="Enter Code (e.g. AURA20)" style="padding:0.8rem; border-radius:4px; border:1px solid var(--glass-border); background:var(--glass-bg); color:#fff; width:100%;">
+                    <button class="btn-secondary" style="width:100%; padding:0.8rem; font-weight:bold;" onclick="applyCoupon()">APPLY COUPON</button>
                 </div>
-                <div style="margin-top: 1rem; text-align:right;">
-                    <h3>Total: <span class="text-accent">$${cartTotal}</span></h3>
-                    <button class="btn-primary" style="margin-top: 1rem;" onclick="checkout()">Checkout & Pay</button>
-                </div>
-            `}
+                
+                ${State.appliedDiscount > 0 ? `<p style="color: var(--accent); margin-bottom: 0.5rem; text-align:center; font-weight:bold;">Discount Applied: -%${State.appliedDiscount}</p>` : ''}
+                
+                <hr style="border-color: var(--glass-border); margin: 1rem 0;">
+                <h2 style="margin-bottom: 1.5rem; text-align:center;">Total: $${total.toFixed(2)}</h2>
+                <button class="btn-primary" style="width:100%; padding:1rem; font-size:1.1rem;" onclick="checkout()">Checkout</button>
+            </div>
         </div>
     `;
-    lucide.createIcons();
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function renderProfile() {
+async function renderProfile() {
     const main = document.getElementById('app-content');
+    
     if (!State.currentUser) {
-        // Show Login / Register
+        // Eğer giriş yapılmadıysa login/register formunu göster
         main.innerHTML = `
-            <div style="display:flex; flex-wrap:wrap; gap: 2rem; max-width: 900px; margin: 4rem auto;">
-                
-                <!-- LOGIN -->
-                <div style="flex:1; background: var(--glass-bg); padding: 2rem; border-radius: 12px; border: 1px solid var(--glass-border);">
-                    <h2 style="margin-bottom:1.5rem; text-align:center;">Login</h2>
+            <div class="auth-container glass-card" style="max-width: 400px; margin: 4rem auto; padding: 2rem;">
+                <h2 style="text-align:center; margin-bottom: 1.5rem;">Join AURA</h2>
+                <form onsubmit="handleAuth(event)">
+                    <input type="hidden" id="auth-action" value="login">
+                    <div class="form-group" id="name-group" style="display:none;">
+                        <label>Full Name</label>
+                        <input type="text" id="auth-name" placeholder="John Doe">
+                    </div>
                     <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="login-email" value="admin@aura.com">
+                        <label>Email Address</label>
+                        <input type="email" id="auth-email" placeholder="you@example.com" required>
                     </div>
                     <div class="form-group">
                         <label>Password</label>
-                        <input type="password" id="login-password" value="admin123">
+                        <input type="password" id="auth-password" placeholder="••••••••" required>
                     </div>
-                    <button class="btn-primary" style="width:100%" onclick="login()">Login</button>
+                    <button type="submit" class="btn-primary" style="width:100%; margin-top:1rem;">Proceed</button>
+                </form>
+                <p style="text-align:center; margin-top:1rem; font-size:0.9rem;">
+                    <a href="#" id="auth-toggle" onclick="
+                        const na = document.getElementById('name-group');
+                        const act = document.getElementById('auth-action');
+                        if(act.value === 'login'){
+                            act.value = 'register'; na.style.display='block'; this.innerText='Already have an account? Login';
+                        } else {
+                            act.value = 'login'; na.style.display='none'; this.innerText='Don\'t have an account? Register';
+                        }
+                    ">Don't have an account? Register</a>
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    // --- SİPARİŞ GEÇMİŞİ VERİLERİ ---
+    const ordersHTML = (State.orders && State.orders.length > 0)
+        ? State.orders.map(order => `
+            <div class="glass-card" style="padding: 1rem; margin-bottom: 1rem; border-left: 4px solid var(--accent); display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h4 style="margin:0;">Order #${order.id}</h4>
+                    <p class="text-muted" style="margin: 5px 0 0 0; font-size:0.9rem;">Total Paid: <span class="text-accent">$${Number(order.total).toFixed(2)}</span></p>
+                </div>
+                <span style="background: rgba(171, 246, 45, 0.1); color: var(--accent); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;">Success</span>
+            </div>
+        `).join('')
+        : '<p class="text-muted">No orders placed yet.</p>';
+
+    // --- KULLANICININ DESTEK TALEPLERİ (TICKETS) VERİLERİ ---
+    let ticketsHTML = '<p class="text-muted">No support tickets found.</p>';
+    try {
+        const tRes = await fetch(`${API_URL}/tickets/user/${State.currentUser.id}`);
+        const tickets = await tRes.json();
+        if(tickets && tickets.length > 0) {
+            ticketsHTML = tickets.map(t => `
+                <div class="glass-card" style="padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${t.status === 'Open' ? '#ffb86c' : 'var(--accent)'}; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h4 style="margin:0;">${t.subject}</h4>
+                        <p class="text-muted" style="margin: 5px 0 0 0; font-size:0.9rem;">${t.message}</p>
+                    </div>
+                    <span style="background: rgba(255,255,255,0.05); color: ${t.status === 'Open' ? '#ffb86c' : 'var(--accent)'}; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;">${t.status}</span>
+                </div>
+            `).join('');
+        }
+    } catch(e) {}
+
+    // --- ANA PROFİL TASARIMI (HTML) ---
+    main.innerHTML = `
+        <div class="page-header">
+            <h2>Welcome, ${State.currentUser.name}</h2>
+            <p class="text-muted">${State.currentUser.email} (${State.currentUser.role.toUpperCase()})</p>
+            <button class="btn-secondary" onclick="State.currentUser = null; navigate('home');" style="margin-top:1rem;">Logout</button>
+        </div>
+
+        <div style="padding: 0 5%; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+            
+            <div style="display:flex; flex-direction:column; gap:2rem;">
+                <div class="glass-card p-4">
+                    <h3>Update Profile</h3>
+                    <form onsubmit="updateProfile(event)" style="display:flex; flex-direction:column; gap:1rem; margin-top:1rem;">
+                        <input type="text" id="edit-name" value="${State.currentUser.name}" required style="padding:0.6rem; background:rgba(0,0,0,0.3); color:#fff; border:1px solid var(--glass-border); border-radius:4px;">
+                        <input type="email" id="edit-email" value="${State.currentUser.email}" required style="padding:0.6rem; background:rgba(0,0,0,0.3); color:#fff; border:1px solid var(--glass-border); border-radius:4px;">
+                        <button type="submit" class="btn-primary" style="width:fit-content;">Save Changes</button>
+                    </form>
                 </div>
 
-                <!-- REGISTER -->
-                <div style="flex:1; background: var(--glass-bg); padding: 2rem; border-radius: 12px; border: 1px solid var(--glass-border);">
-                    <h2 style="margin-bottom:1.5rem; text-align:center;">Register</h2>
-                    <div class="form-group">
-                        <label>Full Name</label>
-                        <input type="text" id="reg-name" placeholder="John Doe">
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="reg-email" placeholder="user@aura.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="reg-password" placeholder="Password">
-                    </div>
-                    <button class="btn-secondary" style="width:100%" onclick="register()">Create Account</button>
+                <div class="glass-card p-4">
+                    <h3>Change Password</h3>
+                    <form onsubmit="updatePassword(event)" style="display:flex; flex-direction:column; gap:1rem; margin-top:1rem;">
+                        <input type="password" id="old-password" placeholder="Current Password" required style="padding:0.6rem; background:rgba(0,0,0,0.3); color:#fff; border:1px solid var(--glass-border); border-radius:4px;">
+                        <input type="password" id="new-password" placeholder="New Password" required style="padding:0.6rem; background:rgba(0,0,0,0.3); color:#fff; border:1px solid var(--glass-border); border-radius:4px;">
+                        <button type="submit" class="btn-primary" style="width:fit-content;">Update Password</button>
+                    </form>
                 </div>
             </div>
-        `;
-    } else {
-        // Show Profile & Reservations Tracking
-        main.innerHTML = `
-            <div class="page-header"><h2>My Profile</h2></div>
-            <div style="max-width: 800px; margin: 0 auto; display:flex; flex-direction:column; gap:2rem;">
-                <div class="glass-card" style="padding: 2rem;">
-                    <h3>Account Info</h3>
-                    <p>Name: ${State.currentUser.name}</p>
-                    <p>Role: <span class="text-accent">${State.currentUser.role}</span></p>
-                    <button class="btn-secondary" style="margin-top:1rem;" onclick="logout()">Logout</button>
-                    ${State.currentUser.role === 'admin' ? `<button class="btn-primary" style="margin-top:1rem; margin-left:1rem;" onclick="navigate('admin')">Admin Dashboard</button>` : ''}
-                </div>
+
+            <div style="display:flex; flex-direction:column; gap:2rem;">
                 
-                <div class="glass-card" style="padding: 2rem;">
-                    <h3>Reservations</h3>
-                    ${State.reservations.length === 0 ? '<p class="text-muted">No active reservations.</p>' : `
-                        <ul>
-                            ${State.reservations.map((r,i) => `
-                                <li style="margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid var(--glass-border);">
-                                    <strong>${r.title}</strong> - Status: <span class="text-accent">${r.status}</span>
-                                    <div class="text-muted" style="margin-top:0.2rem; font-size: 0.9rem;">
-                                        <i data-lucide="calendar" style="width:14px;height:14px;"></i> ${r.date} at ${r.time} (${r.participants} people)
-                                    </div>
-                                    <div style="margin-top:0.5rem;">
-                                        <button class="btn-secondary" onclick="openUpdateReservationModal(${i})" style="font-size:0.8rem;">Change Details</button>
-                                        <button class="btn-secondary" onclick="cancelReservation(${i})" style="font-size:0.8rem; color: #ff5555; border-color: #ff5555;">Cancel</button>
-                                    </div>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    `}
-                    <h3 style="margin-top:2rem;">Orders</h3>
-                    ${State.orders.length === 0 ? '<p class="text-muted">No past orders.</p>' : `
-                        <ul>
-                            ${State.orders.map((o) => `
-                                <li style="margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid var(--glass-border);">
-                                    <strong>Order #${o.id}</strong> - Total: $${o.total} - Status: <span class="text-accent">${o.status}</span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    `}
+                <div class="glass-card p-4" style="max-height: 300px; overflow-y: auto;">
+                    <h3 style="margin-bottom:1.5rem;">Your Order History</h3>
+                    <div id="profile-orders-list">
+                        ${ordersHTML}
+                    </div>
                 </div>
+
+                <div class="glass-card p-4" style="max-height: 300px; overflow-y: auto;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                        <h3 style="margin:0;">Support Tickets</h3>
+                        <button class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.9rem;" onclick="openSupport()">New Ticket</button>
+                    </div>
+                    <div id="profile-tickets-list">
+                        ${ticketsHTML}
+                    </div>
+                </div>
+
             </div>
-        `;
-    }
+        </div>
+    `;
 }
 
 async function renderAdminDashboard() {
@@ -405,6 +462,7 @@ async function showArtworkDetails(id) {
         commentsHTML = '<p class="text-muted">Failed to load comments.</p>';
     }
 
+// --- 1. ESERLER (ARTWORK) İÇİN YORUM SİSTEMLİ MODAL ---
     modalBody.innerHTML = `
         <img src="${art.image}" style="width:100%; height:300px; object-fit:cover; border-radius:8px; margin-bottom:1rem;">
         <h2>${art.title}</h2>
@@ -416,19 +474,31 @@ async function showArtworkDetails(id) {
         </div>
         
         <hr style="border-color: var(--glass-border); margin: 2rem 0;">
-        <h3>Comments</h3>
-        <div id="art-comments-container">${commentsHTML}</div>
         
-        ${State.currentUser && (State.orders.length > 0 || State.reservations.length > 0 || State.currentUser.role === 'admin') ? `
-            <div style="margin-top:1rem;">
-                <textarea placeholder="Write a review..." id="new-comment" style="width:100%; padding:0.5rem; background:rgba(0,0,0,0.5); color:#fff; border:1px solid var(--glass-border);"></textarea>
-                <button class="btn-secondary" style="margin-top:0.5rem;" onclick="addComment(${id}, 'artwork')">Submit</button>
-            </div>
-        ` : (State.currentUser ? '<p class="text-muted" style="margin-top:1rem;">You must have a purchase or reservation history to comment.</p>' : '<p class="text-muted" style="margin-top:1rem;">Log in to post comments.</p>')}
+        <div style="margin-top: 1rem;">
+            <h3>Reviews & Ratings</h3>
+            <form onsubmit="submitComment(event, 'artwork', ${art.id})" style="margin-top: 1.5rem; display:flex; flex-direction:column; gap: 1rem; background: var(--glass-bg); padding: 1.5rem; border-radius: 8px;">
+                <div style="display:flex; gap: 1rem; align-items:center;">
+                    <label style="color: var(--text-muted);">Your Rating:</label>
+                    <select id="new-comment-rating" style="padding: 0.5rem; border-radius: 4px; background: var(--bg-secondary); color: #fff; border: 1px solid var(--glass-border); cursor: pointer;">
+                        <option value="5">★★★★★ (5)</option>
+                        <option value="4">★★★★☆ (4)</option>
+                        <option value="3">★★★☆☆ (3)</option>
+                        <option value="2">★★☆☆☆ (2)</option>
+                        <option value="1">★☆☆☆☆ (1)</option>
+                    </select>
+                </div>
+                <textarea id="new-comment-text" rows="3" placeholder="Share your thoughts about this artwork..." required style="width: 100%; padding: 0.8rem; border-radius:4px; border:1px solid var(--glass-border); background:var(--bg-secondary); color:#fff; font-family: inherit; resize: vertical;"></textarea>
+                <button type="submit" class="btn-primary" style="align-self: flex-start;">Post Review</button>
+            </form>
+            <div id="comments-container" style="margin-top: 2rem;"></div>
+        </div>
     `;
     document.getElementById('modal').classList.add('active');
+    renderComments('artwork', art.id); // Yorumları çağır
 }
 
+// --- 2. ATÖLYELER (WORKSHOP) İÇİN YORUM SİSTEMLİ MODAL ---
 function showWorkshopDetails(id) {
     const ws = State.workshops.find(w => w.id === id);
     const modalBody = document.getElementById('modal-body');
@@ -458,15 +528,36 @@ function showWorkshopDetails(id) {
                 <button class="btn-primary" onclick="bookWorkshop(${ws.id})">Create Reservation</button>
             </div>
         </div>
+
+        <hr style="border-color: var(--glass-border); margin: 2rem 0;">
+        
+        <div style="margin-top: 1rem;">
+            <h3>Reviews & Ratings</h3>
+            <form onsubmit="submitComment(event, 'workshop', ${ws.id})" style="margin-top: 1.5rem; display:flex; flex-direction:column; gap: 1rem; background: var(--glass-bg); padding: 1.5rem; border-radius: 8px;">
+                <div style="display:flex; gap: 1rem; align-items:center;">
+                    <label style="color: var(--text-muted);">Your Rating:</label>
+                    <select id="new-comment-rating" style="padding: 0.5rem; border-radius: 4px; background: var(--bg-secondary); color: #fff; border: 1px solid var(--glass-border); cursor: pointer;">
+                        <option value="5">★★★★★ (5)</option>
+                        <option value="4">★★★★☆ (4)</option>
+                        <option value="3">★★★☆☆ (3)</option>
+                        <option value="2">★★☆☆☆ (2)</option>
+                        <option value="1">★☆☆☆☆ (1)</option>
+                    </select>
+                </div>
+                <textarea id="new-comment-text" rows="3" placeholder="Share your thoughts about this workshop..." required style="width: 100%; padding: 0.8rem; border-radius:4px; border:1px solid var(--glass-border); background:var(--bg-secondary); color:#fff; font-family: inherit; resize: vertical;"></textarea>
+                <button type="submit" class="btn-primary" style="align-self: flex-start;">Post Review</button>
+            </form>
+            <div id="comments-container" style="margin-top: 2rem;"></div>
+        </div>
     `;
     document.getElementById('modal').classList.add('active');
     lucide.createIcons();
+    renderComments('workshop', ws.id); // Yorumları çağır
     
     document.getElementById('participant-count').addEventListener('input', (e) => {
         document.getElementById('ws-total').innerText = e.target.value * ws.price;
     });
 }
-
 function openSupport() {
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
@@ -627,16 +718,19 @@ async function addComment(refId, type) {
 async function submitSupport() {
     const subject = document.getElementById('supp-subject').value;
     const message = document.getElementById('supp-message').value;
+    
     if(!subject || !message) return showToast('Fill all fields', 'error');
+    if(!State.currentUser) return showToast('Please login to send a ticket', 'error');
     
     try {
         await fetch(`${API_URL}/tickets`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ subject, message })
+            body: JSON.stringify({ user_id: State.currentUser.id, subject, message })
         });
         showToast('Ticket sent! Staff will check it soon.');
         closeModal();
+        if(State.currentView === 'profile') renderProfile(); // Profildeyse anında yenile
     } catch(err) {
         showToast('Failed to send ticket', 'error');
     }
@@ -780,23 +874,74 @@ async function cancelReservation(idx) {
         } catch(err) { showToast('Error', 'error'); }
     }
 }
+// --- KUPON DOĞRULAMA (YENİ EKLENEN) ---
+async function applyCoupon() {
+    const codeInput = document.getElementById('coupon-input');
+    if(!codeInput) return;
+    const code = codeInput.value.trim().toUpperCase();
 
-async function checkout() {
-    if(!State.currentUser) return showToast('Login to checkout', 'error');
-    if(State.cart.length === 0) return showToast('Cart is empty', 'error');
-    
-    const cartTotal = State.cart.reduce((sum, item) => sum + item.price, 0);
+    if(!code) {
+        showToast('Please enter a coupon code.', 'error');
+        return;
+    }
+
     try {
-        const res = await fetch(`${API_URL}/orders`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: State.currentUser.id, total: cartTotal, items: State.cart})
+        const res = await fetch(`${API_URL}/coupons/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
         });
         const data = await res.json();
-        if(res.ok) {
-            State.orders.push({id: data.orderId, total: cartTotal, status: 'Paid'});
+        
+        if(data.success) {
+            State.appliedDiscount = data.discount;
+            showToast(`Coupon applied: ${data.discount}% discount!`);
+            navigate('cart'); // Sayfayı yenileyip indirimli fiyatı göstermek için
+        } else {
+            showToast(data.error || 'Invalid coupon', 'error');
+            State.appliedDiscount = 0;
+        }
+    } catch(err) {
+        showToast('Connection error', 'error');
+    }
+}
+
+// --- ESKİ CHECKOUT FONKSİYONUNUN GÜNCEL HALİ ---
+async function checkout() {
+    if(!State.currentUser) {
+        showToast('Please login to checkout', 'error');
+        navigate('profile');
+        return;
+    }
+    if(State.cart.length === 0) return;
+
+    // İndirimli toplam tutarı hesaplama
+    const subtotal = State.cart.reduce((sum, item) => sum + item.price, 0);
+    const discountAmount = (subtotal * State.appliedDiscount) / 100;
+    const finalTotal = subtotal - discountAmount;
+
+    try {
+        const res = await fetch(`${API_URL}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: State.currentUser.id,
+                total: finalTotal,
+                items: State.cart
+            })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
             State.cart = [];
-            document.getElementById('cart-count').innerText = '';
-            showToast('Payment successful! Order tracked in profile.');
+            State.appliedDiscount = 0; // Alışveriş bitince indirimi sıfırla
+            updateNavUI();
+            showToast('Order placed successfully!');
+            
+            // Profildeki sipariş geçmişini tazelemek için
+            const ordersRes = await fetch(`${API_URL}/orders/${State.currentUser.id}`);
+            State.orders = await ordersRes.json();
+            
             navigate('profile');
         }
     } catch(err) {
@@ -841,3 +986,269 @@ function showToast(msg, type = 'success') {
 window.addEventListener('DOMContentLoaded', () => {
     navigate('home');
 });
+
+// --- PROFİL VE ŞİFRE GÜNCELLEME FONKSİYONLARI ---
+
+async function updateProfile(e) {
+    e.preventDefault();
+    const name = document.getElementById('update-name').value;
+    const email = document.getElementById('update-email').value;
+
+    try {
+        const res = await fetch(`${API_URL}/users/${State.currentUser.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            State.currentUser.name = data.name;
+            State.currentUser.email = data.email;
+            showToast('Profile updated successfully!');
+            navigate('profile'); // Sayfayı yenilemek için
+        } else {
+            showToast(data.error || 'Update failed', 'error');
+        }
+    } catch(err) {
+        showToast('Connection error', 'error');
+    }
+}
+
+async function changePassword(e) {
+    e.preventDefault();
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+
+    try {
+        const res = await fetch(`${API_URL}/users/${State.currentUser.id}/password`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            showToast('Password changed successfully!');
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+        } else {
+            showToast(data.error || 'Password update failed', 'error');
+        }
+    } catch(err) {
+        showToast('Connection error', 'error');
+    }
+}
+// --- KARŞILAŞTIRMAYI VERİTABANINA KAYDETME (FRONTEND) ---
+async function saveComparison() {
+    if(!State.currentUser) {
+        showToast('Please login to save comparisons', 'error');
+        navigate('profile');
+        return;
+    }
+    
+    if(State.compareList.length < 2) {
+        showToast('Please add at least 2 items to compare', 'error');
+        return;
+    }
+
+    // Karşılaştırılan elemanların ID'lerini topluyoruz
+    const itemIds = State.compareList.map(item => item.id);
+    
+    // Listenin ilk elemanında 'artist' alanı varsa Artwork'tür, yoksa Workshop'tur
+    const type = State.compareList[0].artist ? 'artwork' : 'workshop';
+
+    try {
+        const res = await fetch(`${API_URL}/comparisons`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: State.currentUser.id,
+                type: type,
+                item_ids: itemIds
+            })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            showToast('Comparison saved to your profile successfully!');
+            State.compareMode = false;
+            State.compareList = [];
+            navigate(State.currentView); // Sayfayı yenileyip modu kapatıyoruz
+        } else {
+            showToast('Failed to save comparison', 'error');
+        }
+    } catch(err) {
+        showToast('Connection error', 'error');
+    }
+}
+// --- YORUM, PUANLAMA VE YANIT SİSTEMİ FONKSİYONLARI ---
+
+async function renderComments(type, refId) {
+    const container = document.getElementById('comments-container');
+    if(!container) return;
+
+    try {
+        const res = await fetch(`${API_URL}/comments/${type}/${refId}`);
+        const comments = await res.json();
+        
+        let html = comments.map(c => `
+            <div class="glass-card" style="padding: 1.5rem; margin-top: 1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong>${c.user_name}</strong>
+                    <span class="text-accent" style="font-size: 1.2rem; letter-spacing: 2px;">
+                        ${'★'.repeat(c.rating)}${'☆'.repeat(5-c.rating)}
+                    </span>
+                </div>
+                <p style="margin: 0.8rem 0; line-height: 1.5;">${c.text}</p>
+                
+                <div style="display:flex; gap: 1rem; font-size: 0.9rem; margin-top: 1rem;">
+                    <button class="icon-btn" onclick="voteComment(${c.id}, 'up', '${type}', ${refId})">
+                        👍 <span style="margin-left:5px;">${c.upvotes}</span>
+                    </button>
+                    <button class="icon-btn" onclick="voteComment(${c.id}, 'down', '${type}', ${refId})">
+                        👎 <span style="margin-left:5px;">${c.downvotes}</span>
+                    </button>
+                </div>
+
+                ${c.admin_reply ? `
+                    <div style="margin-top: 1rem; padding: 1rem; border-left: 3px solid var(--accent); background: rgba(171, 246, 45, 0.05); border-radius: 0 8px 8px 0;">
+                        <small class="text-accent"><strong>Admin Reply:</strong></small>
+                        <p style="margin-top: 0.4rem;">${c.admin_reply}</p>
+                    </div>
+                ` : ''}
+
+                ${(State.currentUser && State.currentUser.role === 'admin' && !c.admin_reply) ? `
+                    <div style="margin-top: 1.5rem; display:flex; gap: 0.5rem;">
+                        <input type="text" id="admin-reply-${c.id}" placeholder="Type admin reply..." style="flex:1; padding: 0.5rem; border-radius:4px; border:1px solid var(--glass-border); background:var(--glass-bg); color:#fff;">
+                        <button class="btn-secondary" onclick="replyComment(${c.id}, '${type}', ${refId})">Reply</button>
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+
+        container.innerHTML = html || '<p class="text-muted" style="margin-top:1rem;">No comments yet. Be the first to share your thoughts!</p>';
+    } catch(err) {
+        container.innerHTML = '<p class="text-muted">Failed to load comments.</p>';
+    }
+}
+
+async function submitComment(e, type, refId) {
+    e.preventDefault();
+    if(!State.currentUser) {
+        showToast('Please login to leave a comment', 'error');
+        return;
+    }
+
+    const text = document.getElementById('new-comment-text').value;
+    const rating = parseInt(document.getElementById('new-comment-rating').value);
+
+    try {
+        const res = await fetch(`${API_URL}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                refId: refId,
+                type: type,
+                user_id: State.currentUser.id,
+                user_name: State.currentUser.name,
+                text: text,
+                rating: rating
+            })
+        });
+        const data = await res.json();
+        if(data.success) {
+            showToast('Review posted successfully!');
+            document.getElementById('new-comment-text').value = '';
+            document.getElementById('new-comment-rating').value = '5';
+            renderComments(type, refId); // Yeni yorum eklenince listeyi yenile
+        }
+    } catch(err) {
+        showToast('Error posting review', 'error');
+    }
+}
+
+async function voteComment(commentId, voteType, type, refId) {
+    try {
+        const res = await fetch(`${API_URL}/comments/${commentId}/vote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voteType })
+        });
+        if(res.ok) renderComments(type, refId); // Oylama sonrası listeyi yenile
+    } catch(err) {
+        showToast('Error voting', 'error');
+    }
+}
+
+async function replyComment(commentId, type, refId) {
+    const replyText = document.getElementById(`admin-reply-${commentId}`).value;
+    if(!replyText) return;
+
+    try {
+        const res = await fetch(`${API_URL}/comments/${commentId}/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reply: replyText })
+        });
+        if(res.ok) {
+            showToast('Reply posted!');
+            renderComments(type, refId); // Yanıt eklenince listeyi yenile
+        }
+    } catch(err) {
+        showToast('Error posting reply', 'error');
+    }
+}
+// --- GİRİŞ VE KAYIT OLMA FONKSİYONU ---
+async function handleAuth(e) {
+    e.preventDefault(); // Sayfanın yenilenmesini engeller
+    const action = document.getElementById('auth-action').value;
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    
+    if (action === 'register') {
+        const name = document.getElementById('auth-name').value;
+        if (!name) return showToast('Please enter your name to register', 'error');
+        
+        try {
+            const res = await fetch(`${API_URL}/register`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, email, password})
+            });
+            const data = await res.json();
+            
+            if(!res.ok) showToast(data.error || 'Registration failed', 'error');
+            else {
+                showToast('Registration successful! Logging you in...');
+                // Kayıt başarılıysa otomatik giriş yap
+                document.getElementById('auth-action').value = 'login';
+                handleAuth(new Event('submit')); 
+            }
+        } catch(err) {
+            showToast('Server error', 'error');
+        }
+    } else {
+        // Login İşlemi
+        try {
+            const res = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email, password})
+            });
+            const data = await res.json();
+            
+            if(!res.ok) {
+                showToast(data.error || 'Login failed', 'error');
+            } else {
+                State.currentUser = data.user;
+                // Kullanıcının verilerini (sepet, favori, siparişler) çek
+                await fetchUserData(data.user.id);
+                showToast('Logged in successfully!');
+                navigate('profile');
+            }
+        } catch(err) {
+            showToast('Server error', 'error');
+        }
+    }
+}

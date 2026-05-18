@@ -16,34 +16,63 @@ const db = new sqlite3.Database('./database.db', (err) => {
     else console.log('Connected to SQLite database.');
 });
 
+// SQLite'ta Foreign Key desteğini açmak için
+db.run('PRAGMA foreign_keys = ON;');
+
 // Seed DB
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS Users (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT UNIQUE, password TEXT, role TEXT
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Artworks (
         id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, artist TEXT, price REAL, category TEXT, image TEXT, description TEXT
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Workshops (
         id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, date TEXT, time TEXT, price REAL, capacity INTEGER, booked INTEGER, instructor TEXT, description TEXT
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Tickets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT, message TEXT, status TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, subject TEXT, message TEXT, status TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Comments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, refId INTEGER, type TEXT, user TEXT, text TEXT, rating INTEGER
+        id INTEGER PRIMARY KEY AUTOINCREMENT, refId INTEGER, type TEXT, user_id INTEGER, user_name TEXT, text TEXT, rating INTEGER, upvotes INTEGER DEFAULT 0, downvotes INTEGER DEFAULT 0, admin_reply TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Favorites (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, artwork_id INTEGER
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, artwork_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+        FOREIGN KEY (artwork_id) REFERENCES Artworks(id) ON DELETE CASCADE
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Reservations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, workshop_id INTEGER, title TEXT, date TEXT, time TEXT, participants INTEGER, total REAL, status TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, workshop_id INTEGER, title TEXT, date TEXT, time TEXT, participants INTEGER, total REAL, status TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+        FOREIGN KEY (workshop_id) REFERENCES Workshops(id) ON DELETE CASCADE
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS Orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, status TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, status TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
     )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS OrderItems (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_type TEXT, item_id INTEGER, title TEXT, price REAL
+        id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_type TEXT, item_id INTEGER, title TEXT, price REAL,
+        FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE CASCADE
+    )`);
+
+    // --- YENİ EKLENEN TABLOLAR (Kuponlar ve Karşılaştırmalar) ---
+    db.run(`CREATE TABLE IF NOT EXISTS Coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, discount_percent INTEGER, is_active INTEGER DEFAULT 1
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS SavedComparisons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, type TEXT, item_ids_json TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
     )`);
 
     // Insert Default Admin if not exists
@@ -51,6 +80,13 @@ db.serialize(() => {
         if (!row && !err) {
             db.run(`INSERT INTO Users (name, email, password, role) VALUES ('Admin', 'admin@aura.com', 'admin123', 'admin')`);
             console.log("Seeding mock admin.");
+        }
+    });
+
+    // Örnek bir İndirim Kuponu ekleyelim (%20 indirim sağlayan AURA20 kodu)
+    db.get('SELECT id FROM Coupons WHERE code = ?', ['AURA20'], (err, row) => {
+        if (!row && !err) {
+            db.run(`INSERT INTO Coupons (code, discount_percent) VALUES ('AURA20', 20)`);
         }
     });
 
@@ -90,6 +126,102 @@ app.post('/api/register', (req, res) => {
         res.json({ message: 'User registered successfully!' });
     });
 });
+// --- PROFIL VE ŞİFRE GÜNCELLEME (Madde 7) ---
+
+// Profil Bilgilerini Güncelleme
+app.put('/api/users/:id', (req, res) => {
+    const { name, email } = req.body;
+    db.run(`UPDATE Users SET name = ?, email = ? WHERE id = ?`, [name, email, req.params.id], function(err) {
+        if(err) return res.status(400).json({error: 'E-posta zaten kullanımda olabilir veya bir hata oluştu.'});
+        res.json({ success: true, name, email });
+    });
+});
+
+// Şifre Değiştirme
+app.put('/api/users/:id/password', (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    
+    db.get(`SELECT password FROM Users WHERE id = ?`, [req.params.id], (err, row) => {
+        if (err || !row) return res.status(500).json({error: 'Kullanıcı bulunamadı'});
+        if (row.password !== currentPassword) return res.status(401).json({error: 'Mevcut şifreniz yanlış!'});
+        
+        db.run(`UPDATE Users SET password = ? WHERE id = ?`, [newPassword, req.params.id], function(err) {
+            if(err) return res.status(500).json({error: 'Şifre güncellenemedi'});
+            res.json({ success: true });
+        });
+    });
+});
+// --- KUPON VE İNDİRİM (Madde 9) ---
+app.post('/api/coupons/validate', (req, res) => {
+    const { code } = req.body;
+    db.get(`SELECT discount_percent FROM Coupons WHERE code = ? AND is_active = 1`, [code], (err, row) => {
+        if (err) return res.status(500).json({ error: 'Database error' });
+        if (!row) return res.status(404).json({ error: 'Invalid or expired coupon' });
+        
+        res.json({ success: true, discount: row.discount_percent });
+    });
+});
+// --- KARŞILAŞTIRMA SİSTEMİ (Madde 11) ---
+
+// 1. Karşılaştırma Sonucunu Kaydetme
+app.post('/api/comparisons', (req, res) => {
+    const { user_id, type, item_ids } = req.body;
+    const item_ids_json = JSON.stringify(item_ids); // ID dizisini metne çevirip saklıyoruz
+    
+    db.run(`INSERT INTO SavedComparisons (user_id, type, item_ids_json) VALUES (?, ?, ?)`, 
+    [user_id, type, item_ids_json], function(err) {
+        if(err) return res.status(500).json({error: 'Karşılaştırma kaydedilemedi.'});
+        res.json({ success: true });
+    });
+});
+
+// 2. Kullanıcının Kayıtlı Karşılaştırmalarını Listeleme (Profil sayfası için)
+app.get('/api/comparisons/:userId', (req, res) => {
+    db.all(`SELECT * FROM SavedComparisons WHERE user_id = ?`, [req.params.userId], (err, rows) => {
+        if(err) return res.status(500).json({error: 'Veritabanı hatası.'});
+        res.json(rows || []);
+    });
+});
+// --- YORUM, DEĞERLENDİRME VE YANIT SİSTEMİ (Madde 13 & 14) ---
+
+// 1. Bir esere/atölyeye ait yorumları getirme
+app.get('/api/comments/:type/:refId', (req, res) => {
+    db.all(`SELECT * FROM Comments WHERE type = ? AND refId = ? ORDER BY id DESC`, 
+    [req.params.type, req.params.refId], (err, rows) => {
+        if(err) return res.status(500).json({error: 'Veritabanı hatası'});
+        res.json(rows || []);
+    });
+});
+
+// 2. Yeni Yorum ve Puan (Rating) Ekleme
+app.post('/api/comments', (req, res) => {
+    const { refId, type, user_id, user_name, text, rating } = req.body;
+    db.run(`INSERT INTO Comments (refId, type, user_id, user_name, text, rating) VALUES (?, ?, ?, ?, ?, ?)`,
+    [refId, type, user_id, user_name, text, rating], function(err) {
+        if(err) return res.status(500).json({error: 'Yorum eklenemedi'});
+        res.json({ success: true, commentId: this.lastID });
+    });
+});
+
+// 3. Yorumu Faydalı Bulma (Upvote / Downvote)
+app.post('/api/comments/:id/vote', (req, res) => {
+    const { voteType } = req.body; // 'up' veya 'down' gelecek
+    const column = voteType === 'up' ? 'upvotes' : 'downvotes';
+    
+    db.run(`UPDATE Comments SET ${column} = ${column} + 1 WHERE id = ?`, [req.params.id], function(err) {
+        if(err) return res.status(500).json({error: 'Oylama başarısız'});
+        res.json({ success: true });
+    });
+});
+
+// 4. Yöneticinin (Admin) Yoruma Yanıt Vermesi
+app.post('/api/comments/:id/reply', (req, res) => {
+    const { reply } = req.body;
+    db.run(`UPDATE Comments SET admin_reply = ? WHERE id = ?`, [reply, req.params.id], function(err) {
+        if(err) return res.status(500).json({error: 'Yanıt eklenemedi'});
+        res.json({ success: true });
+    });
+});
 
 app.get('/api/artworks', (req, res) => {
     db.all(`SELECT * FROM Artworks`, [], (err, rows) => {
@@ -117,20 +249,32 @@ app.post('/api/comments', (req, res) => {
     });
 });
 
-// Tickets endpoints
+// --- DESTEK TALEBİ (TICKETS) SİSTEMİ ---
+
+// 1. Yeni Destek Talebi Oluşturma (user_id eklendi)
 app.post('/api/tickets', (req, res) => {
-    const { subject, message } = req.body;
-    db.run(`INSERT INTO Tickets (subject, message, status) VALUES (?, ?, 'open')`, [subject, message], function(err) {
+    const { user_id, subject, message } = req.body;
+    db.run(`INSERT INTO Tickets (user_id, subject, message, status) VALUES (?, ?, ?, 'Open')`, 
+    [user_id, subject, message], function(err) {
         if(err) return res.status(500).json({error: err.message});
         res.json({ success: true });
     });
 });
 
+// 2. Admin İçin Tüm Talepleri Getirme
 app.get('/api/tickets', (req, res) => {
-    db.all(`SELECT * FROM Tickets`, [], (err, rows) => {
+    db.all(`SELECT * FROM Tickets ORDER BY id DESC`, [], (err, rows) => {
         res.json(rows || []);
     });
 });
+
+// 3. Sadece O Kullanıcıya Ait Talepleri Getirme (Profil için)
+app.get('/api/tickets/user/:userId', (req, res) => {
+    db.all(`SELECT * FROM Tickets WHERE user_id = ? ORDER BY id DESC`, [req.params.userId], (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
 
 // Favorites endpoints
 app.get('/api/favorites/:userId', (req, res) => {
@@ -186,12 +330,13 @@ app.put('/api/reservations/cancel/:id', (req, res) => {
 });
 
 // Orders endpoints
+// --- KULLANICININ SİPARİŞLERİNİ GETİRME ---
 app.get('/api/orders/:userId', (req, res) => {
-    db.all(`SELECT * FROM Orders WHERE user_id = ?`, [req.params.userId], (err, rows) => {
+    db.all(`SELECT * FROM Orders WHERE user_id = ? ORDER BY id DESC`, [req.params.userId], (err, rows) => {
+        if(err) return res.status(500).json({error: 'Veritabanı hatası'});
         res.json(rows || []);
     });
 });
-
 app.post('/api/orders', (req, res) => {
     const { user_id, total, items } = req.body; 
     db.run(`INSERT INTO Orders (user_id, total, status) VALUES (?, ?, 'Paid')`, [user_id, total], function(err) {
