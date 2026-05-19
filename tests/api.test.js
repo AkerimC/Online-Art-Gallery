@@ -114,21 +114,31 @@ describe('Online Art Gallery - 16 Requirement Tests', () => {
 
     // 12. Yorum Ekleme
     it('M12: should allow adding comments to artworks and workshops', async () => {
+        // Create an order first so we can comment on artwork 1
+        await request(app).post('/api/orders').send({
+            user_id: 1, total: 100, payment_method: 'Cash',
+            items: [{ type: 'artwork', id: 1, title: 'Test Art', price: 100 }]
+        });
         const res = await request(app).post('/api/comments').send({
             refId: 1, type: 'artwork', user_id: 1, user_name: 'Admin', text: 'Great!', rating: 5
         });
         expect(res.statusCode).toEqual(200);
+
+        // Add a second comment to test sorting in M13
+        await request(app).post('/api/comments').send({
+            refId: 1, type: 'artwork', user_id: 1, user_name: 'Admin', text: 'Not bad', rating: 3
+        });
     });
 
     // 13. Yorumları Değerlendirme ve Filtreleme
     it('M13: should calculate average rating and filter comments', async () => {
-        // Ortalama puan API'si henüz yok
         const res = await request(app).get('/api/artworks/1/rating');
-        expect(res.body).toHaveProperty('average'); // FAIL BEKLENİYOR
-        
+        expect(res.body).toHaveProperty('average'); 
+        expect(typeof res.body.average).toBe('number');
+
         // Filtreleme testi
         const filterRes = await request(app).get('/api/comments/artwork/1?sort=highest');
-        expect(filterRes.body[0].rating).toBeGreaterThanOrEqual(filterRes.body[1].rating); // FAIL BEKLENİYOR
+        expect(filterRes.body[0].rating).toBeGreaterThanOrEqual(filterRes.body[1].rating); 
     });
 
     // 14. Yorumlara Yanıt Verme

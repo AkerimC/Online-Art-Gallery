@@ -5,6 +5,8 @@ import WorkshopCard from './components/WorkshopCard';
 import Modal from './components/Modal';
 import AuthForm from './components/AuthForm';
 import AdminDashboard from './components/AdminDashboard';
+import UserProfile from './components/UserProfile';
+import Comments from './components/Comments';
 import { Star, Trash2, Calendar } from 'lucide-react';
 
 export default function App() {
@@ -16,6 +18,7 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [itemType, setItemType] = useState(null); 
+  const [paymentMethod, setPaymentMethod] = useState('Credit Card');
 
   useEffect(() => {
     fetch('/api/artworks').then(res => res.json()).then(setArtworks);
@@ -69,6 +72,9 @@ export default function App() {
   const checkout = async () => {
     if (!user) return setView('profile');
     if (cart.length === 0) return;
+    
+    if (!confirm(`Are you sure you want to complete this purchase using ${paymentMethod}?`)) return;
+
     const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -76,7 +82,7 @@ export default function App() {
         user_id: user.id,
         total: cart.reduce((sum, i) => sum + i.price, 0),
         items: cart,
-        payment_method: 'Credit Card'
+        payment_method: paymentMethod
       })
     });
     if (res.ok) {
@@ -86,8 +92,11 @@ export default function App() {
     }
   };
 
-  const bookWorkshop = async (ws, count) => {
+  const bookWorkshop = async (ws, count, date, time, method) => {
     if (!user) return setView('profile');
+
+    if (!confirm(`Confirm reservation for ${count} participants using ${method}?`)) return;
+
     const res = await fetch('/api/reservations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,12 +104,15 @@ export default function App() {
         user_id: user.id,
         workshop_id: ws.id,
         participants: count,
-        total: ws.price * count
+        total: ws.price * count,
+        date: date,
+        time: time,
+        payment_method: method
       })
     });
     if (res.ok) {
       setSelectedItem(null);
-      alert('Reservation created!');
+      alert('Reservation created successfully!');
       setView('home');
     }
   };
@@ -190,7 +202,19 @@ export default function App() {
                 ))}
                 <div style={{textAlign:'right', marginTop:'2rem'}}>
                   <h3>Total: ${cart.reduce((sum, i) => sum + i.price, 0)}</h3>
-                  <button className="btn-primary" style={{marginTop:'1rem', padding:'1rem 2rem'}} onClick={checkout}>Checkout</button>
+                  <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:'1rem', marginTop:'1rem'}}>
+                    <label>Payment Method:</label>
+                    <select 
+                      value={paymentMethod} 
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      style={{padding:'0.5rem', background:'var(--glass-bg)', color:'#fff', border:'1px solid var(--glass-border)', borderRadius:'4px'}}
+                    >
+                      <option value="Credit Card">Credit Card</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="PayPal">PayPal</option>
+                    </select>
+                    <button className="btn-primary" style={{padding:'0.8rem 2rem'}} onClick={checkout}>Confirm & Pay</button>
+                  </div>
                 </div>
               </div>
             )}
@@ -199,11 +223,7 @@ export default function App() {
 
         {view === 'profile' && (
           user ? (
-            <div className="page-header" style={{textAlign:'center'}}>
-              <h2>Welcome, {user.name}</h2>
-              <p>{user.email} (Role: {user.role})</p>
-              <button className="btn-secondary" style={{marginTop:'1rem'}} onClick={() => { setUser(null); setFavorites([]); setView('home'); }}>Logout</button>
-            </div>
+            <UserProfile user={user} onLogout={() => { setUser(null); setFavorites([]); setView('home'); }} onUpdateUser={setUser} />
           ) : <AuthForm onAuth={handleAuth} />
         )}
 
@@ -225,23 +245,43 @@ export default function App() {
                 Add to Cart (${selectedItem.price})
               </button>
             )}
+            <Comments refId={selectedItem.id} type="artwork" user={user} />
           </>
         )}
         {itemType === 'workshop' && selectedItem && (
           <>
             <p className="text-muted">Instructor: {selectedItem.instructor}</p>
-            <p><Calendar style={{width:'16px', verticalAlign:'middle', display:'inline', marginRight:'5px'}} /> {selectedItem.date} | {selectedItem.time}</p>
             <p style={{margin:'1rem 0'}}>{selectedItem.description}</p>
             <div className="form-group">
-                <label>Participants</label>
-                <input type="number" id="p-count-modal" defaultValue="1" min="1" style={{width:'100%', padding:'0.5rem', background:'var(--glass-bg)', color:'#fff', border:'1px solid var(--glass-border)'}} />
+                <label>Date</label>
+                <input type="date" id="w-date-modal" defaultValue={selectedItem.date} style={{width:'100%', padding:'0.5rem', background:'var(--glass-bg)', color:'#fff', border:'1px solid var(--glass-border)', borderRadius:'4px'}} />
             </div>
-            <button className="btn-primary" style={{marginTop:'1rem'}} onClick={() => {
+            <div className="form-group">
+                <label>Time</label>
+                <input type="time" id="w-time-modal" defaultValue={selectedItem.time} style={{width:'100%', padding:'0.5rem', background:'var(--glass-bg)', color:'#fff', border:'1px solid var(--glass-border)', borderRadius:'4px'}} />
+            </div>
+            <div className="form-group">
+                <label>Participants</label>
+                <input type="number" id="p-count-modal" defaultValue="1" min="1" style={{width:'100%', padding:'0.5rem', background:'var(--glass-bg)', color:'#fff', border:'1px solid var(--glass-border)', borderRadius:'4px'}} />
+            </div>
+            <div className="form-group">
+                <label>Payment Method</label>
+                <select id="w-payment-modal" defaultValue="Credit Card" style={{width:'100%', padding:'0.5rem', background:'var(--glass-bg)', color:'#fff', border:'1px solid var(--glass-border)', borderRadius:'4px'}}>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="PayPal">PayPal</option>
+                </select>
+            </div>
+            <button className="btn-primary" style={{marginTop:'1rem', width:'100%'}} onClick={() => {
               const count = document.getElementById('p-count-modal').value;
-              bookWorkshop(selectedItem, parseInt(count));
+              const date = document.getElementById('w-date-modal').value;
+              const time = document.getElementById('w-time-modal').value;
+              const method = document.getElementById('w-payment-modal').value;
+              bookWorkshop(selectedItem, parseInt(count), date, time, method);
             }}>
-              Book Now (${selectedItem.price})
+              Confirm Reservation (${selectedItem.price})
             </button>
+            <Comments refId={selectedItem.id} type="workshop" user={user} />
           </>
         )}
       </Modal>

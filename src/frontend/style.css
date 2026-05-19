@@ -236,7 +236,7 @@ main {
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
+    z-index: 10000;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -252,6 +252,9 @@ main {
     position: relative;
     transform: translateY(20px);
     transition: transform 0.3s ease;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
 }
 .modal-overlay.active .modal-content {
     transform: translateY(0);
@@ -268,9 +271,9 @@ main {
 .close-btn:hover { color: #fff; }
 
 #modal-body {
-    max-height: 75vh;
     overflow-y: auto;
     padding-right: 0.5rem;
+    flex-grow: 1;
 }
 
 #modal-body::-webkit-scrollbar {

@@ -26,7 +26,7 @@ db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS Comments (id INTEGER PRIMARY KEY AUTOINCREMENT, refId INTEGER, type TEXT, user_id INTEGER, user_name TEXT, text TEXT, rating INTEGER, upvotes INTEGER DEFAULT 0, downvotes INTEGER DEFAULT 0, admin_reply TEXT, FOREIGN KEY (user_id) REFERENCES Users(id))`);
     db.run(`CREATE TABLE IF NOT EXISTS Favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, artwork_id INTEGER, FOREIGN KEY (user_id) REFERENCES Users(id), FOREIGN KEY (artwork_id) REFERENCES Artworks(id))`);
     db.run(`CREATE TABLE IF NOT EXISTS Coupons (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, discount_percent INTEGER, is_active INTEGER DEFAULT 1)`);
-    db.run(`CREATE TABLE IF NOT EXISTS Tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, subject TEXT, message TEXT, status TEXT DEFAULT 'Open', created_at TEXT DEFAULT (datetime('now')))`);
+    db.run(`CREATE TABLE IF NOT EXISTS Tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, subject TEXT, message TEXT, status TEXT DEFAULT 'Open', admin_reply TEXT, created_at TEXT DEFAULT (datetime('now')))`);
     db.run(`CREATE TABLE IF NOT EXISTS Comparisons (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, type TEXT, item_ids TEXT)`);
 
     // Seed Admin
@@ -48,7 +48,7 @@ db.serialize(() => {
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
     db.get(`SELECT * FROM Users WHERE email = ? AND password = ?`, [email, password], (err, row) => {
-        if(!row) return res.status(401).json({error: 'Invalid credentials'});
+        if (!row) return res.status(401).json({ error: 'Invalid credentials' });
         res.json({ user: row });
     });
 });
@@ -56,7 +56,7 @@ app.post('/api/login', (req, res) => {
 app.post('/api/register', (req, res) => {
     const { name, email, password } = req.body;
     db.run(`INSERT INTO Users (name, email, password, role) VALUES (?, ?, ?, 'customer')`, [name, email, password], (err) => {
-        if(err) return res.status(400).json({error: 'Email exists'});
+        if (err) return res.status(400).json({ error: 'Email exists' });
         res.json({ success: true });
     });
 });
@@ -85,7 +85,7 @@ app.get('/api/workshops', (req, res) => {
 // M15: Verified Reviews Logic
 app.post('/api/comments', (req, res) => {
     const { refId, type, user_id, user_name, text, rating } = req.body;
-    const checkQuery = type === 'artwork' 
+    const checkQuery = type === 'artwork'
         ? `SELECT id FROM OrderItems WHERE item_id = ? AND order_id IN (SELECT id FROM Orders WHERE user_id = ?)`
         : `SELECT id FROM Reservations WHERE workshop_id = ? AND user_id = ? AND status = 'Active'`;
 
@@ -100,46 +100,70 @@ app.get('/api/comments/:type/:refId', (req, res) => {
     const { type, refId } = req.params;
     const sort = req.query.sort || '';
     let order = 'id DESC';
-    if(type === 'artwork'){
-        if(sort === 'highest') order = 'rating DESC';
-        else if(sort === 'lowest') order = 'rating ASC';
-        else if(sort === 'recent') order = 'id DESC';
-        else if(sort === 'oldest') order = 'id ASC';
+    if (type === 'artwork') {
+        if (sort === 'highest') order = 'rating DESC';
+        else if (sort === 'lowest') order = 'rating ASC';
+        else if (sort === 'recent') order = 'id DESC';
+        else if (sort === 'oldest') order = 'id ASC';
+        else if (sort === 'helpful') order = 'upvotes DESC';
     }
     db.all(`SELECT * FROM Comments WHERE type = ? AND refId = ? ORDER BY ${order}`, [type, refId], (err, rows) => res.json(rows || []));
+});
+
+// Upvote / Downvote comment
+app.post('/api/comments/:id/vote', (req, res) => {
+    const { action } = req.body; // 'up' or 'down'
+    const column = action === 'up' ? 'upvotes' : 'downvotes';
+    db.run(`UPDATE Comments SET ${column} = ${column} + 1 WHERE id = ?`, [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
 });
 
 // Admin reply to comment
 app.post('/api/comments/:id/reply', (req, res) => {
     const { reply } = req.body;
-    db.run(`UPDATE Comments SET admin_reply = ? WHERE id = ?`, [reply, req.params.id], function(err){
-        if(err) return res.status(500).json({ error: err.message });
+    db.run(`UPDATE Comments SET admin_reply = ? WHERE id = ?`, [reply, req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
 
 app.post('/api/orders', (req, res) => {
     const { user_id, total, items, payment_method } = req.body;
-    if(!payment_method) return res.status(400).json({ error: 'Payment method required' });
-    db.run(`INSERT INTO Orders (user_id, total, status, payment_method) VALUES (?, ?, 'Paid', ?)`, [user_id, total, payment_method], function(err) {
+    if (!payment_method) return res.status(400).json({ error: 'Payment method required' });
+    db.run(`INSERT INTO Orders (user_id, total, status, payment_method) VALUES (?, ?, 'Paid', ?)`, [user_id, total, payment_method], function (err) {
         const orderId = this.lastID;
         items.forEach(item => {
             db.run(`INSERT INTO OrderItems (order_id, item_type, item_id, title, price) VALUES (?, ?, ?, ?, ?)`, [orderId, item.type, item.id, item.title, item.price]);
-            if(item.type.toLowerCase() === 'artwork') db.run(`UPDATE Artworks SET is_sold = 1 WHERE id = ?`, [item.id]);
+            if (item.type.toLowerCase() === 'artwork') db.run(`UPDATE Artworks SET is_sold = 1 WHERE id = ?`, [item.id]);
         });
         res.json({ success: true });
     });
 });
 
 app.get('/api/orders/:userId', (req, res) => {
-    db.all(`SELECT * FROM Orders WHERE user_id = ?`, [req.params.userId], (err, rows) => res.json(rows || []));
+    db.all(`SELECT * FROM Orders WHERE user_id = ? ORDER BY id DESC`, [req.params.userId], (err, orders) => {
+        if (err || !orders) return res.json([]);
+        db.all(`SELECT * FROM OrderItems WHERE order_id IN (SELECT id FROM Orders WHERE user_id = ?)`, [req.params.userId], (err2, items) => {
+            const itemsByOrder = {};
+            if (items) {
+                items.forEach(item => {
+                    if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+                    itemsByOrder[item.order_id].push(item);
+                });
+            }
+            orders.forEach(o => o.items = itemsByOrder[o.id] || []);
+            res.json(orders);
+        });
+    });
 });
 
 // Coupons validate
 app.post('/api/coupons/validate', (req, res) => {
     const { code } = req.body;
     db.get(`SELECT discount_percent, is_active FROM Coupons WHERE code = ?`, [code], (err, row) => {
-        if(!row || row.is_active === 0) return res.json({ discount: 0 });
+        if (!row || row.is_active === 0) return res.json({ discount: 0 });
         res.json({ discount: row.discount_percent });
     });
 });
@@ -153,7 +177,19 @@ app.get('/api/artworks/campaigns', (req, res) => {
 app.post('/api/tickets', (req, res) => {
     const { user_id, subject, message } = req.body;
     db.run(`INSERT INTO Tickets (user_id, subject, message, status) VALUES (?, ?, ?, 'Open')`, [user_id, subject, message], (err) => {
-        if(err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+app.get('/api/tickets', (req, res) => {
+    db.all(`SELECT * FROM Tickets ORDER BY id DESC`, (err, rows) => res.json(rows || []));
+});
+
+app.post('/api/tickets/:id/reply', (req, res) => {
+    const { reply } = req.body;
+    db.run(`UPDATE Tickets SET admin_reply = ?, status = 'Answered' WHERE id = ?`, [reply, req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
@@ -166,7 +202,7 @@ app.get('/api/tickets/user/:id', (req, res) => {
 app.post('/api/comparisons', (req, res) => {
     const { user_id, type, item_ids } = req.body;
     db.run(`INSERT INTO Comparisons (user_id, type, item_ids) VALUES (?, ?, ?)`, [user_id, type, JSON.stringify(item_ids)], (err) => {
-        if(err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
@@ -174,8 +210,8 @@ app.post('/api/comparisons', (req, res) => {
 // User update & password change
 app.put('/api/users/:id', (req, res) => {
     const { name, email } = req.body;
-    db.run(`UPDATE Users SET name = ?, email = ? WHERE id = ?`, [name, email, req.params.id], function(err){
-        if(err) return res.status(500).json({ error: err.message });
+    db.run(`UPDATE Users SET name = ?, email = ? WHERE id = ?`, [name, email, req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
@@ -183,33 +219,33 @@ app.put('/api/users/:id', (req, res) => {
 app.put('/api/users/:id/password', (req, res) => {
     const { currentPassword, newPassword } = req.body;
     db.get(`SELECT * FROM Users WHERE id = ?`, [req.params.id], (err, row) => {
-        if(!row) return res.status(404).json({ error: 'User not found' });
-        if(row.password !== currentPassword) return res.status(403).json({ error: 'Current password incorrect' });
+        if (!row) return res.status(404).json({ error: 'User not found' });
+        if (row.password !== currentPassword) return res.status(403).json({ error: 'Current password incorrect' });
         db.run(`UPDATE Users SET password = ? WHERE id = ?`, [newPassword, req.params.id], (e) => res.json({ success: true }));
     });
 });
 
 app.post('/api/reservations', (req, res) => {
-    const { user_id, workshop_id, participants, total } = req.body;
-    db.run(`INSERT INTO Reservations (user_id, workshop_id, participants, total, status) VALUES (?, ?, ?, ?, 'Active')`, 
-        [user_id, workshop_id, participants, total], () => {
-        db.run(`UPDATE Workshops SET booked = booked + ? WHERE id = ?`, [participants, workshop_id]);
-        res.json({ success: true });
-    });
+    const { user_id, workshop_id, participants, total, date, time } = req.body;
+    db.run(`INSERT INTO Reservations (user_id, workshop_id, participants, total, status, date, time) VALUES (?, ?, ?, ?, 'Active', ?, ?)`,
+        [user_id, workshop_id, participants, total, date, time], () => {
+            db.run(`UPDATE Workshops SET booked = booked + ? WHERE id = ?`, [participants, workshop_id]);
+            res.json({ success: true });
+        });
 });
 
 app.get('/api/reservations/:userId', (req, res) => {
-    db.all(`SELECT * FROM Reservations WHERE user_id = ?`, [req.params.userId], (err, rows) => res.json(rows || []));
+    db.all(`SELECT * FROM Reservations WHERE user_id = ? ORDER BY id DESC`, [req.params.userId], (err, rows) => res.json(rows || []));
 });
 
 app.put('/api/reservations/:id', (req, res) => {
     const { participants, total, date, time } = req.body;
     db.get(`SELECT * FROM Reservations WHERE id = ?`, [req.params.id], (err, row) => {
-        if(!row) return res.status(404).json({ error: 'Reservation not found' });
+        if (!row) return res.status(404).json({ error: 'Reservation not found' });
         const oldParticipants = row.participants || 0;
         const delta = (participants || oldParticipants) - oldParticipants;
         db.run(`UPDATE Reservations SET participants = ?, total = ?, date = ?, time = ? WHERE id = ?`, [participants || oldParticipants, total || row.total, date || row.date, time || row.time, req.params.id], (e) => {
-            if(delta !== 0) db.run(`UPDATE Workshops SET booked = booked + ? WHERE id = ?`, [delta, row.workshop_id]);
+            if (delta !== 0) db.run(`UPDATE Workshops SET booked = booked + ? WHERE id = ?`, [delta, row.workshop_id]);
             res.json({ success: true });
         });
     });
@@ -217,7 +253,7 @@ app.put('/api/reservations/:id', (req, res) => {
 
 app.put('/api/reservations/cancel/:id', (req, res) => {
     db.get(`SELECT * FROM Reservations WHERE id = ?`, [req.params.id], (err, row) => {
-        if(!row) return res.status(404).json({ error: 'Reservation not found' });
+        if (!row) return res.status(404).json({ error: 'Reservation not found' });
         db.run(`UPDATE Reservations SET status = 'Cancelled' WHERE id = ?`, [req.params.id], () => {
             db.run(`UPDATE Workshops SET booked = booked - ? WHERE id = ?`, [row.participants || 0, row.workshop_id]);
             res.json({ success: true });
@@ -228,9 +264,9 @@ app.put('/api/reservations/cancel/:id', (req, res) => {
 // M16: Admin Reports
 app.get('/api/admin/reports', (req, res) => {
     const report = {};
-    db.all(`SELECT title, views, (SELECT COUNT(*) FROM Favorites WHERE artwork_id = Artworks.id) as favs, (SELECT AVG(rating) FROM Comments WHERE refId = Artworks.id AND type='artwork') as avg_rating FROM Artworks`, (err, arts) => {
+    db.all(`SELECT title, views, (SELECT COUNT(*) FROM Favorites WHERE artwork_id = Artworks.id) as favs, (SELECT COUNT(*) FROM Comments WHERE refId = Artworks.id AND type='artwork') as comment_count, (SELECT AVG(rating) FROM Comments WHERE refId = Artworks.id AND type='artwork') as avg_rating FROM Artworks`, (err, arts) => {
         report.artwork_stats = arts;
-        db.all(`SELECT title, capacity, booked, (booked * 100.0 / capacity) as occupancy_rate FROM Workshops`, (err2, works) => {
+        db.all(`SELECT title, capacity, booked, (booked * 100.0 / capacity) as occupancy_rate, (SELECT COUNT(*) FROM Comments WHERE refId = Workshops.id AND type='workshop') as comment_count, (SELECT AVG(rating) FROM Comments WHERE refId = Workshops.id AND type='workshop') as avg_rating, (SELECT COUNT(*) FROM Reservations WHERE workshop_id = Workshops.id) as total_reservations FROM Workshops`, (err2, works) => {
             report.workshop_stats = works;
             db.get(`SELECT SUM(total) as total_sales FROM Orders`, (err3, sales) => {
                 report.financials = sales;
@@ -251,7 +287,7 @@ app.post('/api/favorites', (req, res) => {
 
 app.delete('/api/favorites/:userId/:artworkId', (req, res) => {
     db.run(`DELETE FROM Favorites WHERE user_id = ? AND artwork_id = ?`, [req.params.userId, req.params.artworkId], (err) => {
-        if(err) return res.status(500).json({error: err.message});
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
