@@ -170,6 +170,18 @@ app.post('/api/coupons/validate', (req, res) => {
     });
 });
 
+app.get('/api/admin/coupons', (req, res) => {
+    db.all(`SELECT * FROM Coupons ORDER BY id DESC`, (err, rows) => res.json(rows || []));
+});
+
+app.post('/api/admin/coupons', (req, res) => {
+    const { code, discount_percent } = req.body;
+    db.run(`INSERT INTO Coupons (code, discount_percent, is_active) VALUES (?, ?, 1)`, [code, discount_percent], function(err) {
+        if (err) return res.status(400).json({ error: 'Coupon code might already exist.' });
+        res.json({ success: true, id: this.lastID });
+    });
+});
+
 // Campaign artworks
 app.get('/api/artworks/campaigns', (req, res) => {
     db.all(`SELECT * FROM Artworks WHERE is_campaign = 1`, (err, rows) => res.json(rows || []));

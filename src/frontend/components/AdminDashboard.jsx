@@ -4,17 +4,35 @@ const AdminDashboard = () => {
   const [reports, setReports] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [replyText, setReplyText] = useState({});
+  const [coupons, setCoupons] = useState([]);
+  const [newCoupon, setNewCoupon] = useState({ code: '', discount_percent: 10 });
 
-  const fetchTickets = () => {
-    fetch('/api/tickets').then(res => res.json()).then(setTickets);
-  };
+  const fetchTickets = () => fetch('/api/tickets').then(res => res.json()).then(setTickets);
+  const fetchCoupons = () => fetch('/api/admin/coupons').then(res => res.json()).then(setCoupons);
 
   useEffect(() => {
-    fetch('/api/admin/reports')
-      .then(res => res.json())
-      .then(setReports);
+    fetch('/api/admin/reports').then(res => res.json()).then(setReports);
     fetchTickets();
+    fetchCoupons();
   }, []);
+
+  const handleCreateCoupon = async (e) => {
+    e.preventDefault();
+    if (!newCoupon.code) return;
+    const res = await fetch('/api/admin/coupons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCoupon)
+    });
+    if (res.ok) {
+      alert('Coupon created successfully!');
+      setNewCoupon({ code: '', discount_percent: 10 });
+      fetchCoupons();
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to create coupon');
+    }
+  };
 
   const handleReply = async (ticketId) => {
     const text = replyText[ticketId];
@@ -135,6 +153,40 @@ const AdminDashboard = () => {
               </div>
             ))
           )}
+        </div>
+      </div>
+
+      <div style={{marginTop:'3rem'}}>
+        <h3>Coupon Management</h3>
+        <div style={{display:'flex', gap:'2rem', flexWrap:'wrap'}}>
+          <div className="glass-card p-4" style={{flex:'1', minWidth:'300px'}}>
+            <h4>Create New Coupon</h4>
+            <form onSubmit={handleCreateCoupon} style={{marginTop:'1rem'}}>
+              <div className="form-group">
+                <label>Coupon Code</label>
+                <input type="text" value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} required />
+              </div>
+              <div className="form-group">
+                <label>Discount Percent (%)</label>
+                <input type="number" min="1" max="100" value={newCoupon.discount_percent} onChange={e => setNewCoupon({...newCoupon, discount_percent: Number(e.target.value)})} required />
+              </div>
+              <button type="submit" className="btn-primary" style={{width:'100%'}}>Create Coupon</button>
+            </form>
+          </div>
+          <div style={{flex:'2', minWidth:'300px'}}>
+            <h4>Existing Coupons</h4>
+            <div className="grid-container" style={{gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', marginTop:'1rem'}}>
+              {coupons.length === 0 ? <p className="text-muted">No coupons found.</p> : (
+                coupons.map(c => (
+                  <div key={c.id} className="glass-card p-4" style={{textAlign:'center'}}>
+                    <h3 style={{margin:0, color:'var(--accent)', letterSpacing:'1px'}}>{c.code}</h3>
+                    <p style={{margin:'0.5rem 0 0 0', fontSize:'1.2rem'}}>{c.discount_percent}% OFF</p>
+                    <span style={{fontSize:'0.8rem', color: c.is_active ? '#abf62d' : '#ff4444'}}>{c.is_active ? 'Active' : 'Inactive'}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

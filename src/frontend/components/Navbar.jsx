@@ -14,7 +14,10 @@ const Navbar = ({ currentView, setView, user, favCount, cartCount }) => (
       <li><a href="#" onClick={() => setView('cart')} className={currentView === 'cart' ? 'active' : ''}>Cart {cartCount > 0 && `(${cartCount})`}</a></li>
     </ul>
     <div className="nav-actions">
-      <button className="icon-btn"><MessageCircle /></button>
+      <button className="icon-btn" onClick={() => { 
+        setView('profile'); 
+        setTimeout(() => document.getElementById('support-section')?.scrollIntoView({behavior: 'smooth'}), 100); 
+      }}><MessageCircle /></button>
       <button className="btn-primary" onClick={() => setView('profile')}>
         {user ? 'Profile' : 'Login / Register'}
       </button>

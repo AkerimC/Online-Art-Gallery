@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const UserProfile = ({ user, onLogout, onUpdateUser }) => {
+const UserProfile = ({ user, onLogout, onUpdateUser, onViewComparison }) => {
   const [orders, setOrders] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [editingRes, setEditingRes] = useState(null);
@@ -132,6 +132,19 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
         </div>
       </div>
 
+      <div style={{ marginTop: '2rem', background: 'linear-gradient(45deg, rgba(171, 246, 45, 0.2), rgba(0, 0, 0, 0))', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--accent)' }}>
+        <h3 style={{ margin: '0 0 1rem 0', color: 'var(--accent)' }}>🎉 Special Offers Just For You!</h3>
+        <p>As a valued {user.role === 'admin' ? 'administrator' : 'member'} of Aura, we have some exclusive discounts for you to use on your next purchase:</p>
+        <ul style={{ marginTop: '1rem', listStyle: 'none', padding: 0 }}>
+          <li style={{ marginBottom: '0.5rem' }}>🎫 <strong style={{color:'#fff', letterSpacing:'1px'}}>AURA20</strong> - 20% off all artworks and workshops.</li>
+          <li style={{ marginBottom: '0.5rem' }}>🎫 <strong style={{color:'#fff', letterSpacing:'1px'}}>YAZ50</strong> - 50% summer discount (Limited time).</li>
+          {user.role === 'customer' && (
+            <li>🎫 <strong style={{color:'#fff', letterSpacing:'1px'}}>VIP30</strong> - 30% discount for our loyal customers.</li>
+          )}
+        </ul>
+        <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Enter the coupon code in your Cart before checkout.</p>
+      </div>
+
       <div style={{ marginTop: '3rem' }}>
         <h3>Your Purchased Items</h3>
         <div className="grid-container" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
@@ -198,8 +211,18 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
               }).filter(Boolean);
 
               return (
-                <div key={c.id} className="glass-card p-4">
-                  <h4 style={{ textTransform: 'capitalize', marginBottom: '0.5rem' }}>{c.type} Comparison</h4>
+                <div 
+                  key={c.id} 
+                  className="glass-card p-4" 
+                  style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+                  onClick={() => onViewComparison && onViewComparison(items)}
+                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.3)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'var(--glass-shadow)'; }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <h4 style={{ textTransform: 'capitalize', margin: 0 }}>{c.type} Comparison</h4>
+                    <span className="text-accent" style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>View Full</span>
+                  </div>
                   <ul style={{ listStyle: 'none', padding: 0 }}>
                     {items.map((item, i) => (
                       <li key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '0.5rem 0', display: 'flex', justifyContent: 'space-between' }}>
@@ -215,7 +238,7 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
         </div>
       </div>
 
-      <div style={{ marginTop: '3rem' }}>
+      <div id="support-section" style={{ marginTop: '3rem' }}>
         <h3>Customer Support</h3>
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
           <div className="glass-card p-4" style={{ flex: '1', minWidth: '300px' }}>

@@ -22,6 +22,8 @@ export default function App() {
 
   const [compareMode, setCompareMode] = useState(false);
   const [selectedForCompare, setSelectedForCompare] = useState([]);
+  const [couponCode, setCouponCode] = useState('');
+  const [discount, setDiscount] = useState(0);
 
   useEffect(() => {
     fetch('/api/artworks').then(res => res.json()).then(setArtworks);
@@ -72,6 +74,24 @@ export default function App() {
     }
   };
 
+  const applyCoupon = async () => {
+    const res = await fetch('/api/coupons/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: couponCode })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.discount > 0) {
+        setDiscount(data.discount);
+        alert(`Coupon applied! ${data.discount}% off.`);
+      } else {
+        setDiscount(0);
+        alert('Invalid or expired coupon.');
+      }
+    }
+  };
+
   const checkout = async () => {
     if (!user) return setView('profile');
     if (cart.length === 0) return;
@@ -83,13 +103,15 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         user_id: user.id,
-        total: cart.reduce((sum, i) => sum + i.price, 0),
+        total: cart.reduce((sum, i) => sum + i.price, 0) * (1 - discount / 100),
         items: cart,
         payment_method: paymentMethod
       })
     });
     if (res.ok) {
       setCart([]);
+      setDiscount(0);
+      setCouponCode('');
       alert('Order placed successfully!');
       setView('home');
     }
@@ -176,7 +198,31 @@ export default function App() {
                 )}
               </div>
             </div>
-            <div className="grid-container">
+            
+            {artworks.filter(a => a.is_campaign).length > 0 && (
+              <div style={{ marginBottom: '4rem' }}>
+                <h3 style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Star fill="var(--accent)" /> Special Campaigns & Offers
+                </h3>
+                <div className="grid-container" style={{ marginTop: '1rem' }}>
+                  {artworks.filter(a => a.is_campaign).map(art => (
+                    <ArtworkCard 
+                      key={`camp-${art.id}`} 
+                      art={art} 
+                      isFav={favorites.includes(art.id)}
+                      onToggleFav={toggleFavorite}
+                      onShowDetails={(item) => { setSelectedItem(item); setItemType('artwork'); }}
+                      compareMode={compareMode}
+                      isSelectedForCompare={!!selectedForCompare.find(i => i.id === art.id)}
+                      onToggleCompare={toggleCompare}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <h3>All Artworks</h3>
+            <div className="grid-container" style={{ marginTop: '1rem' }}>
               {artworks.map(art => (
                 <ArtworkCard 
                   key={art.id} 
@@ -380,7 +426,19 @@ export default function App() {
                   </div>
                 ))}
                 <div style={{textAlign:'right', marginTop:'2rem'}}>
-                  <h3>Total: ${cart.reduce((sum, i) => sum + i.price, 0)}</h3>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginBottom: '1rem' }}>
+                    <input 
+                      type="text" 
+                      placeholder="Coupon Code" 
+                      value={couponCode} 
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      style={{ padding: '0.5rem', background: 'var(--glass-bg)', color: '#fff', border: '1px solid var(--glass-border)', borderRadius: '4px' }}
+                    />
+                    <button className="btn-secondary" onClick={applyCoupon}>Apply</button>
+                  </div>
+                  <h3>Subtotal: ${cart.reduce((sum, i) => sum + i.price, 0)}</h3>
+                  {discount > 0 && <h3 style={{ color: 'var(--accent)' }}>Discount: {discount}%</h3>}
+                  <h2>Total: ${(cart.reduce((sum, i) => sum + i.price, 0) * (1 - discount / 100)).toFixed(2)}</h2>
                   <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:'1rem', marginTop:'1rem'}}>
                     <label>Payment Method:</label>
                     <select 
@@ -402,7 +460,12 @@ export default function App() {
 
         {view === 'profile' && (
           user ? (
-            <UserProfile user={user} onLogout={() => { setUser(null); setFavorites([]); setView('home'); }} onUpdateUser={setUser} />
+            <UserProfile 
+              user={user} 
+              onLogout={() => { setUser(null); setFavorites([]); setView('home'); }} 
+              onUpdateUser={setUser} 
+              onViewComparison={(items) => { setSelectedForCompare(items); setView('compare'); }}
+            />
           ) : <AuthForm onAuth={handleAuth} />
         )}
 
