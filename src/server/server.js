@@ -8,10 +8,11 @@ const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
+// Statik dosyaları src/public klasöründen sun
+app.use(express.static(path.join(__dirname, '../public')));
 
-// Initialize Database
-const db = new sqlite3.Database('./database.db', (err) => {
+// Initialize Database - src/server klasörü içinde oluştur
+const db = new sqlite3.Database(path.join(__dirname, 'database.db'), (err) => {
     if (err) console.error(err.message);
     else console.log('Connected to SQLite database.');
 });
