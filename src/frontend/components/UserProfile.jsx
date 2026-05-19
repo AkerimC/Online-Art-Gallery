@@ -18,6 +18,10 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
   const [tickets, setTickets] = useState([]);
   const [ticketForm, setTicketForm] = useState({ subject: '', message: '' });
 
+  // Comparisons state
+  const [comparisons, setComparisons] = useState([]);
+  const [catalog, setCatalog] = useState({ artworks: [], workshops: [] });
+
   const fetchData = async () => {
     if (!user) return;
     const resOrders = await fetch(`/api/orders/${user.id}`);
@@ -28,6 +32,15 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
 
     const resTickets = await fetch(`/api/tickets/user/${user.id}`);
     if (resTickets.ok) setTickets(await resTickets.json());
+
+    const resComps = await fetch(`/api/comparisons/${user.id}`);
+    if (resComps.ok) setComparisons(await resComps.json());
+
+    const resArt = await fetch('/api/artworks');
+    const resWork = await fetch('/api/workshops');
+    if (resArt.ok && resWork.ok) {
+      setCatalog({ artworks: await resArt.json(), workshops: await resWork.json() });
+    }
   };
 
   useEffect(() => {
@@ -169,6 +182,35 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
                 )}
               </div>
             ))
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginTop: '3rem' }}>
+        <h3>Your Saved Comparisons</h3>
+        <div className="grid-container" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+          {comparisons.length === 0 ? <p className="text-muted">No saved comparisons.</p> : (
+            comparisons.map(c => {
+              const ids = JSON.parse(c.item_ids || '[]');
+              const items = ids.map(id => {
+                if (c.type === 'artwork') return catalog.artworks.find(a => a.id === id);
+                return catalog.workshops.find(w => w.id === id);
+              }).filter(Boolean);
+
+              return (
+                <div key={c.id} className="glass-card p-4">
+                  <h4 style={{ textTransform: 'capitalize', marginBottom: '0.5rem' }}>{c.type} Comparison</h4>
+                  <ul style={{ listStyle: 'none', padding: 0 }}>
+                    {items.map((item, i) => (
+                      <li key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '0.5rem 0', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{item.title}</span>
+                        <span className="text-accent">${item.price}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

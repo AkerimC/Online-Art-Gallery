@@ -20,6 +20,9 @@ export default function App() {
   const [itemType, setItemType] = useState(null); 
   const [paymentMethod, setPaymentMethod] = useState('Credit Card');
 
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState([]);
+
   useEffect(() => {
     fetch('/api/artworks').then(res => res.json()).then(setArtworks);
     fetch('/api/workshops').then(res => res.json()).then(setWorkshops);
@@ -117,6 +120,32 @@ export default function App() {
     }
   };
 
+  const toggleCompare = (item) => {
+    setSelectedForCompare(prev => {
+      if (prev.find(i => i.id === item.id)) {
+        return prev.filter(i => i.id !== item.id);
+      }
+      return [...prev, item];
+    });
+  };
+
+  const saveComparison = async () => {
+    if (!user) return setView('profile');
+    const type = view === 'home' ? 'artwork' : 'workshop';
+    const res = await fetch('/api/comparisons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user.id,
+        type: type,
+        item_ids: selectedForCompare.map(i => i.id)
+      })
+    });
+    if (res.ok) {
+      alert('Comparison saved successfully!');
+    }
+  };
+
   return (
     <div className="app-container">
       <Navbar 
@@ -130,9 +159,22 @@ export default function App() {
       <main id="app-content">
         {view === 'home' && (
           <>
-            <div className="page-header">
+            <div className="page-header" style={{ position: 'relative' }}>
               <h2>Explore the Collection</h2>
               <p className="text-muted">Curated artworks from visionary creators</p>
+              <div style={{ position: 'absolute', top: '20px', right: '0' }}>
+                <button className={`btn-${compareMode ? 'primary' : 'secondary'}`} onClick={() => {
+                  setCompareMode(!compareMode);
+                  if (compareMode) setSelectedForCompare([]);
+                }}>
+                  {compareMode ? 'Cancel Compare' : 'Compare Artworks'}
+                </button>
+                {compareMode && selectedForCompare.length > 0 && (
+                  <button className="btn-primary" style={{ marginLeft: '1rem' }} onClick={() => setView('compare')}>
+                    Compare Selected ({selectedForCompare.length})
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid-container">
               {artworks.map(art => (
@@ -142,6 +184,9 @@ export default function App() {
                   isFav={favorites.includes(art.id)}
                   onToggleFav={toggleFavorite}
                   onShowDetails={(item) => { setSelectedItem(item); setItemType('artwork'); }}
+                  compareMode={compareMode}
+                  isSelectedForCompare={!!selectedForCompare.find(i => i.id === art.id)}
+                  onToggleCompare={toggleCompare}
                 />
               ))}
             </div>
@@ -150,9 +195,22 @@ export default function App() {
 
         {view === 'events' && (
           <>
-            <div className="page-header">
+            <div className="page-header" style={{ position: 'relative' }}>
               <h2>Workshops & Events</h2>
               <p className="text-muted">Learn from the masters themselves.</p>
+              <div style={{ position: 'absolute', top: '20px', right: '0' }}>
+                <button className={`btn-${compareMode ? 'primary' : 'secondary'}`} onClick={() => {
+                  setCompareMode(!compareMode);
+                  if (compareMode) setSelectedForCompare([]);
+                }}>
+                  {compareMode ? 'Cancel Compare' : 'Compare Workshops'}
+                </button>
+                {compareMode && selectedForCompare.length > 0 && (
+                  <button className="btn-primary" style={{ marginLeft: '1rem' }} onClick={() => setView('compare')}>
+                    Compare Selected ({selectedForCompare.length})
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid-container">
               {workshops.map(ws => (
@@ -160,6 +218,9 @@ export default function App() {
                   key={ws.id} 
                   ws={ws} 
                   onBook={(item) => { setSelectedItem(item); setItemType('workshop'); }}
+                  compareMode={compareMode}
+                  isSelectedForCompare={!!selectedForCompare.find(i => i.id === ws.id)}
+                  onToggleCompare={toggleCompare}
                 />
               ))}
             </div>
@@ -181,6 +242,124 @@ export default function App() {
               ))}
             </div>
           </>
+        )}
+
+        {view === 'compare' && (
+          <div style={{ padding: '2rem' }}>
+            <div className="page-header">
+              <h2>Comparison</h2>
+              <button className="btn-secondary" onClick={() => setView('home')}>Back</button>
+              <button className="btn-primary" style={{ marginLeft: '1rem' }} onClick={saveComparison}>Save Comparison</button>
+            </div>
+            <div style={{ overflowX: 'auto', marginTop: '2rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <th style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)' }}>Feature</th>
+                    {selectedForCompare.map(item => (
+                      <th key={item.id} style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        <img src={item.image || 'https://via.placeholder.com/150'} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+                        <br />{item.title}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>Price</td>
+                    {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem', color: 'var(--accent)' }}>${item.price}</td>)}
+                  </tr>
+                  {selectedForCompare[0]?.category !== undefined && (
+                    <>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Category</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.category}</td>)}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Artist</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.artist}</td>)}
+                      </tr>
+                    </>
+                  )}
+                  {selectedForCompare[0]?.capacity !== undefined && (
+                    <>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Date & Time</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.date} | {item.time}</td>)}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Instructor</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.instructor}</td>)}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Capacity</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.booked} / {item.capacity} booked</td>)}
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {view === 'compare' && (
+          <div style={{ padding: '2rem' }}>
+            <div className="page-header">
+              <h2>Comparison</h2>
+              <button className="btn-secondary" onClick={() => setView('home')}>Back</button>
+              <button className="btn-primary" style={{ marginLeft: '1rem' }} onClick={saveComparison}>Save Comparison</button>
+            </div>
+            <div style={{ overflowX: 'auto', marginTop: '2rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <th style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)' }}>Feature</th>
+                    {selectedForCompare.map(item => (
+                      <th key={item.id} style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        {item.image && <><img src={item.image} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} /><br /></>}
+                        {item.title}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>Price</td>
+                    {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem', color: 'var(--accent)' }}>${item.price}</td>)}
+                  </tr>
+                  {selectedForCompare[0]?.category !== undefined && (
+                    <>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Category</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.category}</td>)}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Artist</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.artist}</td>)}
+                      </tr>
+                    </>
+                  )}
+                  {selectedForCompare[0]?.capacity !== undefined && (
+                    <>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Date & Time</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.date} | {item.time}</td>)}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Instructor</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.instructor}</td>)}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold' }}>Capacity</td>
+                        {selectedForCompare.map(item => <td key={item.id} style={{ padding: '1rem' }}>{item.booked} / {item.capacity} booked</td>)}
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
 
         {view === 'cart' && (

@@ -2,11 +2,19 @@ import React from 'react';
 import { Heart } from 'lucide-react';
 import soldImg from '../assets/sold.png';
 
-const ArtworkCard = ({ art, isFav, onToggleFav, onShowDetails }) => {
+const ArtworkCard = ({ art, isFav, onToggleFav, onShowDetails, compareMode, isSelectedForCompare, onToggleCompare }) => {
   const isSold = art.is_sold === 1;
 
   return (
-    <div className="glass-card art-card" style={{ position: 'relative', overflow: 'hidden' }}>
+    <div className={`glass-card art-card ${isSelectedForCompare ? 'compare-mode-active' : ''}`} style={{ position: 'relative', overflow: 'hidden' }}>
+      {compareMode && (
+        <input 
+          type="checkbox" 
+          className="compare-checkbox" 
+          checked={isSelectedForCompare || false} 
+          onChange={() => onToggleCompare(art)} 
+        />
+      )}
       {isSold && (
         <div style={{
           position: 'absolute',

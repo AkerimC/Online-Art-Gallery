@@ -1,8 +1,16 @@
 import React from 'react';
 import { Calendar } from 'lucide-react';
 
-const WorkshopCard = ({ ws, onBook }) => (
-  <div className="glass-card workshop-card">
+const WorkshopCard = ({ ws, onBook, compareMode, isSelectedForCompare, onToggleCompare }) => (
+  <div className={`glass-card workshop-card ${isSelectedForCompare ? 'compare-mode-active' : ''}`} style={{ position: 'relative' }}>
+    {compareMode && (
+      <input 
+        type="checkbox" 
+        className="compare-checkbox" 
+        checked={isSelectedForCompare || false} 
+        onChange={() => onToggleCompare(ws)} 
+      />
+    )}
     <div className="card-body">
       <h3 className="card-title">{ws.title}</h3>
       <p className="card-artist">Instructor: {ws.instructor}</p>

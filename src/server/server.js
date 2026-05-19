@@ -1,5 +1,7 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+
+
 const cors = require('cors');
 const path = require('path');
 
@@ -205,6 +207,10 @@ app.post('/api/comparisons', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
+});
+
+app.get('/api/comparisons/:userId', (req, res) => {
+    db.all(`SELECT * FROM Comparisons WHERE user_id = ? ORDER BY id DESC`, [req.params.userId], (err, rows) => res.json(rows || []));
 });
 
 // User update & password change
