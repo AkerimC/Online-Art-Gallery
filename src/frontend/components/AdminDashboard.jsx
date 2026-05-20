@@ -6,12 +6,31 @@ const AdminDashboard = () => {
   const [replyText, setReplyText] = useState({});
   const [coupons, setCoupons] = useState([]);
   const [newCoupon, setNewCoupon] = useState({ code: '', discount_percent: 10 });
+  const [newArtwork, setNewArtwork] = useState({
+    title: '',
+    artist: '',
+    price: '',
+    category: '',
+    image: '',
+    description: '',
+    is_campaign: false
+  });
+  const [newWorkshop, setNewWorkshop] = useState({
+    title: '',
+    date: '',
+    time: '',
+    price: '',
+    capacity: '',
+    instructor: '',
+    description: ''
+  });
 
+  const fetchReports = () => fetch('/api/admin/reports').then(res => res.json()).then(setReports);
   const fetchTickets = () => fetch('/api/tickets').then(res => res.json()).then(setTickets);
   const fetchCoupons = () => fetch('/api/admin/coupons').then(res => res.json()).then(setCoupons);
 
   useEffect(() => {
-    fetch('/api/admin/reports').then(res => res.json()).then(setReports);
+    fetchReports();
     fetchTickets();
     fetchCoupons();
   }, []);
@@ -46,6 +65,49 @@ const AdminDashboard = () => {
       alert('Reply sent successfully!');
       setReplyText(prev => ({ ...prev, [ticketId]: '' }));
       fetchTickets();
+    }
+  };
+
+  const handleCreateArtwork = async (e) => {
+    e.preventDefault();
+    if (!newArtwork.title || !newArtwork.artist || newArtwork.price === '') return;
+    const res = await fetch('/api/admin/artworks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newArtwork,
+        price: Number(newArtwork.price)
+      })
+    });
+    if (res.ok) {
+      alert('Artwork created successfully!');
+      setNewArtwork({ title: '', artist: '', price: '', category: '', image: '', description: '', is_campaign: false });
+      fetchReports();
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to create artwork');
+    }
+  };
+
+  const handleCreateWorkshop = async (e) => {
+    e.preventDefault();
+    if (!newWorkshop.title || !newWorkshop.date || !newWorkshop.time || newWorkshop.price === '' || newWorkshop.capacity === '') return;
+    const res = await fetch('/api/admin/workshops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newWorkshop,
+        price: Number(newWorkshop.price),
+        capacity: Number(newWorkshop.capacity)
+      })
+    });
+    if (res.ok) {
+      alert('Workshop created successfully!');
+      setNewWorkshop({ title: '', date: '', time: '', price: '', capacity: '', instructor: '', description: '' });
+      fetchReports();
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to create workshop');
     }
   };
 
@@ -119,6 +181,86 @@ const AdminDashboard = () => {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div style={{marginTop:'3rem'}}>
+        <h3>Content Management</h3>
+        <div style={{display:'flex', gap:'2rem', flexWrap:'wrap'}}>
+          <div className="glass-card p-4" style={{flex:'1', minWidth:'300px'}}>
+            <h4>Add New Artwork</h4>
+            <form onSubmit={handleCreateArtwork} style={{marginTop:'1rem'}}>
+              <div className="form-group">
+                <label>Title</label>
+                <input type="text" value={newArtwork.title} onChange={e => setNewArtwork({...newArtwork, title: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Artist</label>
+                <input type="text" value={newArtwork.artist} onChange={e => setNewArtwork({...newArtwork, artist: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Price</label>
+                <input type="number" min="0" step="0.01" value={newArtwork.price} onChange={e => setNewArtwork({...newArtwork, price: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Category</label>
+                <input type="text" value={newArtwork.category} onChange={e => setNewArtwork({...newArtwork, category: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Image URL</label>
+                <input type="text" value={newArtwork.image} onChange={e => setNewArtwork({...newArtwork, image: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea value={newArtwork.description} onChange={e => setNewArtwork({...newArtwork, description: e.target.value})} rows="3" />
+              </div>
+              <div className="form-group" style={{display:'flex', gap:'0.5rem', alignItems:'center'}}>
+                <input
+                  type="checkbox"
+                  id="is_campaign"
+                  checked={newArtwork.is_campaign}
+                  onChange={e => setNewArtwork({...newArtwork, is_campaign: e.target.checked})}
+                />
+                <label htmlFor="is_campaign" style={{margin:0}}>Campaign Artwork</label>
+              </div>
+              <button type="submit" className="btn-primary" style={{width:'100%'}}>Create Artwork</button>
+            </form>
+          </div>
+
+          <div className="glass-card p-4" style={{flex:'1', minWidth:'300px'}}>
+            <h4>Add New Workshop</h4>
+            <form onSubmit={handleCreateWorkshop} style={{marginTop:'1rem'}}>
+              <div className="form-group">
+                <label>Title</label>
+                <input type="text" value={newWorkshop.title} onChange={e => setNewWorkshop({...newWorkshop, title: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Date</label>
+                <input type="date" value={newWorkshop.date} onChange={e => setNewWorkshop({...newWorkshop, date: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Time</label>
+                <input type="time" value={newWorkshop.time} onChange={e => setNewWorkshop({...newWorkshop, time: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Price</label>
+                <input type="number" min="0" step="0.01" value={newWorkshop.price} onChange={e => setNewWorkshop({...newWorkshop, price: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Capacity</label>
+                <input type="number" min="1" step="1" value={newWorkshop.capacity} onChange={e => setNewWorkshop({...newWorkshop, capacity: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label>Instructor</label>
+                <input type="text" value={newWorkshop.instructor} onChange={e => setNewWorkshop({...newWorkshop, instructor: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea value={newWorkshop.description} onChange={e => setNewWorkshop({...newWorkshop, description: e.target.value})} rows="3" />
+              </div>
+              <button type="submit" className="btn-primary" style={{width:'100%'}}>Create Workshop</button>
+            </form>
+          </div>
         </div>
       </div>
       <div style={{marginTop:'3rem'}}>

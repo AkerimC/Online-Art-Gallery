@@ -182,6 +182,38 @@ app.post('/api/admin/coupons', (req, res) => {
     });
 });
 
+// Admin: create artwork
+app.post('/api/admin/artworks', (req, res) => {
+    const { title, artist, price, category, image, description, is_campaign } = req.body;
+    if (!title || !artist || price === undefined || price === null) {
+        return res.status(400).json({ error: 'Title, artist, and price are required.' });
+    }
+    db.run(
+        `INSERT INTO Artworks (title, artist, price, category, image, description, is_campaign) VALUES (?, ?, ?, ?, ?, ?, ?)` ,
+        [title, artist, Number(price), category || '', image || '', description || '', is_campaign ? 1 : 0],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, id: this.lastID });
+        }
+    );
+});
+
+// Admin: create workshop
+app.post('/api/admin/workshops', (req, res) => {
+    const { title, date, time, price, capacity, instructor, description } = req.body;
+    if (!title || !date || !time || price === undefined || capacity === undefined) {
+        return res.status(400).json({ error: 'Title, date, time, price, and capacity are required.' });
+    }
+    db.run(
+        `INSERT INTO Workshops (title, date, time, price, capacity, instructor, description) VALUES (?, ?, ?, ?, ?, ?, ?)` ,
+        [title, date, time, Number(price), Number(capacity), instructor || '', description || ''],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, id: this.lastID });
+        }
+    );
+});
+
 // Campaign artworks
 app.get('/api/artworks/campaigns', (req, res) => {
     db.all(`SELECT * FROM Artworks WHERE is_campaign = 1`, (err, rows) => res.json(rows || []));

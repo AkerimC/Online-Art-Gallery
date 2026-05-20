@@ -137,10 +137,6 @@ const UserProfile = ({ user, onLogout, onUpdateUser, onViewComparison }) => {
         <p>As a valued {user.role === 'admin' ? 'administrator' : 'member'} of Aura, we have some exclusive discounts for you to use on your next purchase:</p>
         <ul style={{ marginTop: '1rem', listStyle: 'none', padding: 0 }}>
           <li style={{ marginBottom: '0.5rem' }}>🎫 <strong style={{color:'#fff', letterSpacing:'1px'}}>AURA20</strong> - 20% off all artworks and workshops.</li>
-          <li style={{ marginBottom: '0.5rem' }}>🎫 <strong style={{color:'#fff', letterSpacing:'1px'}}>YAZ50</strong> - 50% summer discount (Limited time).</li>
-          {user.role === 'customer' && (
-            <li>🎫 <strong style={{color:'#fff', letterSpacing:'1px'}}>VIP30</strong> - 30% discount for our loyal customers.</li>
-          )}
         </ul>
         <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Enter the coupon code in your Cart before checkout.</p>
       </div>

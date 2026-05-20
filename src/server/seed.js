@@ -7,9 +7,9 @@ db.serialize(() => {
     // Insert more artworks
     db.run(`INSERT INTO Artworks (title, artist, price, category, image, description) VALUES
         ('Cosmic Bloom', 'Alex D.', 1500, 'Digital', 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=600&q=80', 'A colorful display of cosmic flowers.'),
-        ('Monochrome Reality', 'Sarah L.', 700, 'Photography', 'https://images.unsplash.com/photo-1542456073-952de36315c1?auto=format&fit=crop&w=600&q=80', 'Raw essence of street life.'),
+        ('Monochrome Reality', 'Sarah L.', 700, 'Photography', 'https://images.unsplash.com/photo-1715481082153-dc97ed9b1559?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', 'Raw essence of street life.'),
         ('Oil on Ocean', 'Michael T.', 950, 'Painting', 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=600&q=80', 'Textured canvas depicting rough seas.'),
-        ('Cyberpunk City', 'Elena R.', 2500, 'Digital', 'https://images.unsplash.com/photo-1515238152791-8216bf248af0?auto=format&fit=crop&w=600&q=80', 'Neon streets in a dystopian future.')
+        ('Cyberpunk City', 'Elena R.', 2500, 'Digital', 'https://images.unsplash.com/photo-1563863251222-11d3e3bd3b62?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', 'Neon streets in a dystopian future.')
     `);
 
     // Insert more workshops
