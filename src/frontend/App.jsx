@@ -13,6 +13,7 @@ export default function App() {
   const [view, setView] = useState('home');
   const [user, setUser] = useState(null);
   const [artworks, setArtworks] = useState([]);
+  const [campaignArtworks, setCampaignArtworks] = useState([]);
   const [workshops, setWorkshops] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [cart, setCart] = useState([]);
@@ -24,9 +25,13 @@ export default function App() {
   const [selectedForCompare, setSelectedForCompare] = useState([]);
   const [couponCode, setCouponCode] = useState('');
   const [discount, setDiscount] = useState(0);
+  const campaignList = (campaignArtworks && campaignArtworks.length > 0)
+    ? campaignArtworks
+    : artworks.filter(a => a.is_campaign);
 
   useEffect(() => {
     fetch('/api/artworks').then(res => res.json()).then(setArtworks);
+    fetch('/api/artworks/campaigns').then(res => res.json()).then(setCampaignArtworks);
     fetch('/api/workshops').then(res => res.json()).then(setWorkshops);
   }, []);
 
@@ -236,6 +241,34 @@ export default function App() {
                 />
               ))}
             </div>
+          </>
+        )}
+
+        {view === 'campaigns' && (
+          <>
+            <div className="page-header">
+              <h2>Campaign Artworks</h2>
+              <p className="text-muted">Limited-time offers curated for you.</p>
+            </div>
+
+            {campaignList.length === 0 ? (
+              <p className="text-muted">No active campaigns at the moment.</p>
+            ) : (
+              <div className="grid-container">
+                {campaignList.map(art => (
+                  <ArtworkCard
+                    key={`campaign-${art.id}`}
+                    art={art}
+                    isFav={favorites.includes(art.id)}
+                    onToggleFav={toggleFavorite}
+                    onShowDetails={(item) => { setSelectedItem(item); setItemType('artwork'); }}
+                    compareMode={compareMode}
+                    isSelectedForCompare={!!selectedForCompare.find(i => i.id === art.id)}
+                    onToggleCompare={toggleCompare}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
 

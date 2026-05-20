@@ -6,6 +6,7 @@ const Navbar = ({ currentView, setView, user, favCount, cartCount }) => (
     <div className="logo"><h1>Aura<span>.</span></h1></div>
     <ul className="nav-links">
       <li><a href="#" onClick={() => setView('home')} className={currentView === 'home' ? 'active' : ''}>Discover</a></li>
+      <li><a href="#" onClick={() => setView('campaigns')} className={currentView === 'campaigns' ? 'active' : ''}>Campaigns</a></li>
       <li><a href="#" onClick={() => setView('events')} className={currentView === 'events' ? 'active' : ''}>Workshops</a></li>
       {user?.role === 'admin' && (
         <li><a href="#" onClick={() => setView('admin')} className={currentView === 'admin' ? 'active' : ''} style={{color:'var(--accent)'}}>Admin Panel</a></li>
